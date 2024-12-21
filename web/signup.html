@@ -1,0 +1,108 @@
+{{ template "components/_header" }}
+<body>
+
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <img src="/web/images/logo/logo-chat-app.png" alt="Logo Chat Nge-Chat" class="img-fluid" style="border-radius: 50%; max-width: 150px; height: auto;">
+        </div>
+        <h1 class="text-center mb-4">Chat Nge-Chat</h1>
+        <hr>
+        <h2 class="text-center mb-4">SignUp</h2>
+
+        <!-- Form Login -->
+        <form id="signupForm">
+            <!-- Input Username -->
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan username" required minLength="5">
+            </div>
+
+            <!-- Input Password -->
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Masukkan password" required minlength="6">
+            </div>
+
+            <div class="mb-3">
+                <label for="password_confirm" class="form-label">Password Confirmation</label>
+                <input type="password" id="password_confirm" name="password_confirm" class="form-control" placeholder="Masukkan password" required>
+            </div>
+
+            <!-- Tombol Login -->
+            <button type="submit" class="btn btn-primary w-100">Sign Up</button>
+        </form>
+
+        <!-- Link Register -->
+        <div class="footer-text">
+            Have Account? <a href="/login">Login Here!</a>
+        </div>
+    </div>
+
+    {{ template "components/_footer-script" }}
+
+    {{ template "components/_loading" }}
+
+    {{ template "components/_modal-infor" }}
+
+    <script>
+        hideLoader()
+
+        $('document').ready(async function() {
+            $('#username').focus()
+            
+            $("#signupForm").submit(async function() {
+                event.preventDefault()
+
+                const username = $('#username').val().trim()
+                const password = $('#password').val().trim()
+                const password_confirm = $('#password_confirm').val().trim()
+
+                if (username === '' || password === '') {
+                    showInfoModal('Username and password must be filled', 'Signup Failed')
+                    alert('Username dan password tidak boleh kosong.')
+                    return
+                }
+
+                if (password !== password_confirm) {
+                    showInfoModal('Password and password confirmation not same', 'Signup Failed')
+                    return
+                }
+
+                showLoader()
+
+                try {
+                    const resp = await fetch("/signup", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username: username, 
+                            password: password
+                        }),
+                    })
+                    const response = await resp.json()
+
+                    if (!response.error) {
+                        showInfoModal('Signup Success', 'Signup Success')
+                        setTimeout(() => {
+                            window.location.href = '/login'
+                        }, 1000)
+                    }
+
+                    else {
+                        showInfoModal(response.message, 'Signup Failed')
+                    }
+
+                } catch (e) {
+                    showInfoModal('Terjadi kesalahan saat signup: ' + e.message, 'Signup Failed')
+                } finally {
+                    hideLoader()
+                }
+
+            })
+        })
+    </script>
+
+</body>
+</html>
