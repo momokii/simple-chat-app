@@ -1,0 +1,7 @@
+# folder
+server.crt
+server.key
+.env
+
+# file
+tmp

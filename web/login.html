@@ -1,0 +1,91 @@
+{{ template "components/_header" }}
+<body>
+
+    <div class="login-card">
+        <div class="text-center mb-4">
+            <img src="/web/images/logo/logo-chat-app.png" alt="Logo Chat Nge-Chat" class="img-fluid" style="border-radius: 50%; max-width: 150px; height: auto;">
+        </div>
+
+        <h1 class="text-center mb-4">Chat Nge-Chat</h1>
+        <hr>
+        <h2 class="text-center mb-4">Login</h2>
+
+        <!-- Form Login -->
+        <form id="loginForm">
+            <!-- Input Username -->
+            <div class="mb-3">
+                <label for="username" class="form-label">Username</label>
+                <input type="text" id="username" name="username" class="form-control" placeholder="Masukkan username" required>
+            </div>
+
+            <!-- Input Password -->
+            <div class="mb-3">
+                <label for="password" class="form-label">Password</label>
+                <input type="password" id="password" name="password" class="form-control" placeholder="Masukkan password" required>
+            </div>
+
+            <!-- Tombol Login -->
+            <button type="submit" class="btn btn-primary w-100">Login</button>
+        </form>
+
+        <!-- Link Register -->
+        <div class="footer-text">
+            Don't Have Account? <a href="/signup">Sign Up Here!</a>
+        </div>
+    </div>
+
+    {{ template "components/_footer-script" }}
+
+    {{ template "components/_loading" }}
+
+    {{ template "components/_modal-infor" }}
+
+    <script>
+        hideLoader()
+
+        $('document').ready(async function() {
+            $('#username').focus()
+            
+            $("#loginForm").submit(async function() {
+                event.preventDefault()
+
+                const username = $('#username').val().trim()
+                const password = $('#password').val().trim()
+
+                if (username === '' || password === '') {
+                    showInfoModal("Failed", 'Login Failed')
+                    return
+                }
+
+                showLoader()
+
+                try {
+                    const resp = await fetch("/login", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username: username, 
+                            password: password
+                        }),
+                    })
+                    const response = await resp.json()
+
+                    if (!response.error) window.location.href = '/'
+                    else showInfoModal(response.message, 'Login Failed')
+
+                } catch(e) {
+                    showInfoModal('Terjadi kesalahan saat login: ' + e.message, 'Login Failed')
+                } finally {
+                    hideLoader()
+                }
+                
+            })
+        })
+
+
+    </script>
+
+</body>
+</html>
