@@ -66,8 +66,8 @@ COPY --from=build /bin/server /bin
 COPY --from=build /src/web /web
 
 # Salin file konfigurasi jika diperlukan for example ssl
-COPY --from=build /src/server.key /server.key
-COPY --from=build /src/server.crt /server.crt
+# COPY --from=build /src/server.key /server.key
+# COPY --from=build /src/server.crt /server.crt
 
 # If you need healthcheck
 # Periksa status aplikasi setiap 30 detik

@@ -1,6 +1,5 @@
-{{ template "components/_header" }}
+{{ template "components/_header" .}}
 <body>
-
     <div class="login-card">
         <div class="text-center mb-4">
             <img src="/web/images/logo/logo-chat-app.png" alt="Logo Chat Nge-Chat" class="img-fluid" style="border-radius: 50%; max-width: 150px; height: auto;">
@@ -34,11 +33,11 @@
         </div>
     </div>
 
-    {{ template "components/_footer-script" }}
+    {{ template "components/_footer-script" . }}
 
-    {{ template "components/_loading" }}
+    {{ template "components/_loading" . }}
 
-    {{ template "components/_modal-infor" }}
+    {{ template "components/_modal-infor" . }}
 
     <script>
         hideLoader()
@@ -60,7 +59,7 @@
                 showLoader()
 
                 try {
-                    const resp = await fetch("/login", {
+                    const resp = await fetch("/api/login", {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -73,10 +72,10 @@
                     const response = await resp.json()
 
                     if (!response.error) window.location.href = '/'
-                    else showInfoModal(response.message, 'Login Failed')
+                    else throw new Error(response.message)
 
                 } catch(e) {
-                    showInfoModal('Terjadi kesalahan saat login: ' + e.message, 'Login Failed')
+                    showInfoModal('Login Failed: ' + e.message, 'Login Failed')
                 } finally {
                     hideLoader()
                 }

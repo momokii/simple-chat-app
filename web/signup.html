@@ -1,4 +1,4 @@
-{{ template "components/_header" }}
+{{ template "components/_header" . }}
 <body>
 
     <div class="login-card">
@@ -38,11 +38,11 @@
         </div>
     </div>
 
-    {{ template "components/_footer-script" }}
+    {{ template "components/_footer-script" . }}
 
-    {{ template "components/_loading" }}
+    {{ template "components/_loading" . }}
 
-    {{ template "components/_modal-infor" }}
+    {{ template "components/_modal-infor" . }}
 
     <script>
         hideLoader()
@@ -59,7 +59,6 @@
 
                 if (username === '' || password === '') {
                     showInfoModal('Username and password must be filled', 'Signup Failed')
-                    alert('Username dan password tidak boleh kosong.')
                     return
                 }
 
@@ -71,7 +70,7 @@
                 showLoader()
 
                 try {
-                    const resp = await fetch("/signup", {
+                    const resp = await fetch("/api/signup", {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
@@ -95,7 +94,7 @@
                     }
 
                 } catch (e) {
-                    showInfoModal('Terjadi kesalahan saat signup: ' + e.message, 'Signup Failed')
+                    showInfoModal('Signup Failed: ' + e.message, 'Signup Failed')
                 } finally {
                     hideLoader()
                 }

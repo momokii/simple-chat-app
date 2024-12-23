@@ -22,6 +22,52 @@ func NewRoomChatHandler(roomChatRepo room.RoomChatRepo) *RoomChatHandler {
 	}
 }
 
+func (h *RoomChatHandler) RoomMainDashboardView(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	return c.Render("dashboard", fiber.Map{
+		"Title": "Main - Chat Nge-Chat",
+		"User":  user,
+	})
+}
+
+func (h *RoomChatHandler) RoomChatView(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	return c.Render("chatroom", fiber.Map{
+		"Title": "Chatroom - Chat Nge-Chat",
+		"User":  user,
+	})
+}
+
+func (h *RoomChatHandler) GetRoomData(c *fiber.Ctx) error {
+	roomCode := c.Params("room_code")
+	if roomCode == "" {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Room Code is required")
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to start transaction")
+	}
+	defer func() {
+		database.CommitOrRollback(tx, c, err)
+	}()
+	// check if roomExist
+	roomData, err := h.roomChatRepo.FindByCodeOrAndId(tx, roomCode, 0)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to check room")
+	}
+
+	if roomData.Id == 0 {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Room is not exist")
+	}
+
+	return utils.ResponseWithData(c, fiber.StatusOK, "Success Get Room Data", fiber.Map{
+		"room": roomData,
+	})
+}
+
 func (h *RoomChatHandler) GetRoomList(c *fiber.Ctx) error {
 	// user data
 	user := c.Locals("user").(models.UserSession)

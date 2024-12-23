@@ -1,4 +1,4 @@
-{{ template "components/_header-dashboard" }}
+{{ template "components/_header-dashboard" . }}
 <body>
 
     <div class="container py-3">
@@ -236,18 +236,18 @@
         </div>
     </div>
 
-{{ template "components/_footer-script" }}
+    {{ template "components/_footer-script" . }}
 
-{{ template "components/_loading" }}
+    {{ template "components/_loading" . }}
 
-{{ template "components/_modal-infor" }}
+    {{ template "components/_modal-infor" . }}
 <script>
     const modalAddRoom = new bootstrap.Modal($('#createRoomModal'))
     const editPassModal = new bootstrap.Modal($('#editPasswordModal'))
     const editUSernameModal = new bootstrap.Modal($('#editUsernameModal'))
 
     hideLoader()
-    let ROOM_BASE_URL = '/rooms'
+    let ROOM_BASE_URL = '/api/rooms'
     let ROOM_IS_SELF = false
     let SEARCH_TIMEOUT = null
     let SEARCH_ROOM = ''
@@ -331,8 +331,8 @@
     }
 
     async function loadChat(self = false) {
-        if (self) ROOM_BASE_URL = "/rooms/?self=true"
-        else ROOM_BASE_URL = "/rooms/?self=false"
+        if (self) ROOM_BASE_URL = "/api/rooms/?self=true"
+        else ROOM_BASE_URL = "/api/rooms/?self=false"
 
         ROOM_BASE_URL += `&search=${SEARCH_ROOM}&filter=${FILTER_ROOM}&page=${PAGE}&per_page=${PER_PAGE}`
 
@@ -345,7 +345,7 @@
                     'Content-Type': 'application/json'
                 },
             })
-            const response = await resp.json()
+            const response = await resp.json( )
 
             if(response.error) throw new Error('Failed to load chat: ' + response.message)
             else {
@@ -388,7 +388,7 @@
                                 </p>
 
                                 <p class="text-muted">Created at: <span><b>${create_date}</b></span></p>
-                                <a href="/room/${room.id}" class="btn btn-primary btn-sm mt-2">Join</a>
+                                <a href="/rooms/${room.room_code}" class="btn btn-primary btn-sm mt-2">Join</a>
 
                             </div>
                         `;
@@ -405,9 +405,7 @@
 
         } catch (e) {
             hideLoader()
-            showInfoModal('Logout load chat: ' + e.message, 'Failed to load chat')
-        } finally {
-
+            showInfoModal('Failed load chat: ' + e.message, 'Failed to load chat')
         }
     }
 
@@ -428,7 +426,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/rooms", {
+                const resp = await fetch("/api/rooms", {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json'
@@ -468,7 +466,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/rooms", {
+                const resp = await fetch("/api/rooms", {
                     method: 'DELETE',
                     headers: {
                         'Content-Type': 'application/json'
@@ -508,7 +506,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/users", {
+                const resp = await fetch("/api/users", {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json'
@@ -553,7 +551,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/users/password", {
+                const resp = await fetch("/api/users/password", {
                     method: 'PATCH',
                     headers: {
                         'Content-Type': 'application/json'
@@ -589,7 +587,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/logout", {
+                const resp = await fetch("/api/logout", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -629,7 +627,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/rooms", {
+                const resp = await fetch("/api/rooms", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'

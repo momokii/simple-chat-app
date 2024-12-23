@@ -61,6 +61,8 @@ func (m *Manager) RouterEvent(event Event, c *Client) error {
 func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request) {
 	log.Println("new connection")
 
+	room_code := r.URL.Query().Get("room_code")
+
 	conn, err := webSocketUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Println("error serve websocket: ", err)
@@ -68,7 +70,7 @@ func (m *Manager) ServeWS(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// every new connection will create new client and manager will manage it
-	client := NewClient(conn, m)
+	client := NewClient(conn, m, &room_code)
 
 	m.AddClient(client)
 

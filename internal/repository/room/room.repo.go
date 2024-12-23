@@ -26,7 +26,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 	paramData := []interface{}{}
 	if is_user_room == "true" {
 		if user_id < 1 {
-			return &[]models.RoomChatDataShow{}, 0, fmt.Errorf("User ID is required")
+			return &rooms, 0, fmt.Errorf("User ID is required")
 		}
 		addQuery := " AND rc.created_by = $" + fmt.Sprint(idxParam)
 
@@ -58,7 +58,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 	// total data
 	// query total data first bcs we need to know how many data in total and no need to use 2 extra parameter below for offset and per_page
 	if err := tx.QueryRow(total_query, paramData...).Scan(&total); err != nil && err != sql.ErrNoRows {
-		return &[]models.RoomChatDataShow{}, total, err
+		return &rooms, total, err
 	}
 
 	query += " ORDER BY rc.created_at " + filterType + " OFFSET $" + fmt.Sprint(idxParam) + " LIMIT $" + fmt.Sprint(idxParam+1)
@@ -68,7 +68,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 	// all data
 	rows, err := tx.Query(query, paramData...)
 	if err != nil {
-		return &[]models.RoomChatDataShow{}, total, err
+		return &rooms, total, err
 	}
 	defer rows.Close()
 
@@ -76,7 +76,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 		var room models.RoomChatDataShow
 
 		if err := rows.Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt); err != nil {
-			return &[]models.RoomChatDataShow{}, total, err
+			return &rooms, total, err
 		}
 
 		rooms = append(rooms, room)
@@ -86,12 +86,11 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 }
 
 func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*models.RoomChatDataShow, error) {
+	var room models.RoomChatDataShow
 
 	if code == "" && id < 1 {
-		return &models.RoomChatDataShow{}, fmt.Errorf("Code or/and ID is required")
+		return &room, fmt.Errorf("Code or/and ID is required")
 	}
-
-	var room models.RoomChatDataShow
 
 	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1=1"
 
@@ -110,7 +109,7 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 	}
 
 	if err := tx.QueryRow(query, paramData...).Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt); err != nil && err != sql.ErrNoRows {
-		return &models.RoomChatDataShow{}, err
+		return &room, err
 	}
 
 	return &room, nil
