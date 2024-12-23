@@ -30,11 +30,12 @@ type Client struct {
 	egress chan Event
 }
 
-func NewClient(conn *websocket.Conn, m *Manager) *Client {
+func NewClient(conn *websocket.Conn, m *Manager, room_code *string) *Client {
 	return &Client{
 		connection: conn,
 		manager:    m,
 		egress:     make(chan Event),
+		chatroom:   *room_code,
 	}
 }
 

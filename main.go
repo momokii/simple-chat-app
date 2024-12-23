@@ -12,7 +12,7 @@ import (
 	"github.com/momokii/simple-chat-app/internal/database"
 	"github.com/momokii/simple-chat-app/internal/handlers"
 	"github.com/momokii/simple-chat-app/internal/middlewares"
-	"github.com/momokii/simple-chat-app/internal/models"
+	"github.com/momokii/simple-chat-app/internal/repository/message"
 	"github.com/momokii/simple-chat-app/internal/repository/room"
 	"github.com/momokii/simple-chat-app/internal/repository/user"
 	"github.com/momokii/simple-chat-app/internal/ws"
@@ -28,11 +28,13 @@ func main() {
 	// repo init
 	userRepo := user.NewUserRepo()
 	roomRepo := room.NewRoomChatRepo()
+	messageRepo := message.NewMessageRepo()
 
 	// handler init
 	authHandler := handlers.NewAuthHandler(*userRepo)
 	roomHandler := handlers.NewRoomChatHandler(*roomRepo)
 	userHandler := handlers.NewUserHandler(*userRepo)
+	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo)
 
 	// init websocket manager
 	manager := ws.NewManager()
@@ -51,54 +53,58 @@ func main() {
 			})
 		},
 	})
+	api := app.Group("/api")
 
+	app.Use(middlewares.IsServerActive) // check if server is active
 	app.Use(cors.New())
 	app.Use(logger.New())
 	app.Static("/web", "./web")
 
-	// websocket connection
-	app.Get("/ws", adaptor.HTTPHandlerFunc(manager.ServeWS))
-
 	// dashboard
-	app.Get("/", middlewares.IsAuth, func(c *fiber.Ctx) error {
-		user := c.Locals("user").(models.UserSession)
+	app.Get("/", middlewares.IsAuth, roomHandler.RoomMainDashboardView)
 
-		// user := models.UserSession{
-		// 	Id:       1,
-		// 	Username: "test",
-		// }
-
-		return c.Render("dashboard", fiber.Map{
-			"Title": "RoomPage - Chat Nge-Chat",
-			"User":  user,
-		})
-	})
-
-	app.Get("/chat", func(c *fiber.Ctx) error {
-		return c.Render("index", fiber.Map{
-			"Title": "RoomPage - Chat Nge-Chat",
-		})
-	})
+	// room page
+	app.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.RoomChatView)
+	api.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.GetRoomData)
 
 	// base http route
 	app.Get("/login", middlewares.IsNotAuth, authHandler.LoginView)
-	app.Post("/login", middlewares.IsNotAuth, authHandler.Login)
+	api.Post("/login", middlewares.IsNotAuth, authHandler.Login)
 
 	app.Get("/signup", middlewares.IsNotAuth, authHandler.SignUpView)
-	app.Post("/signup", middlewares.IsNotAuth, authHandler.SignUp)
+	api.Post("/signup", middlewares.IsNotAuth, authHandler.SignUp)
 
-	app.Post("/logout", middlewares.IsAuth, authHandler.Logout)
+	api.Post("/logout", middlewares.IsAuth, authHandler.Logout)
 
-	app.Get("/rooms", middlewares.IsAuth, roomHandler.GetRoomList)
-	app.Post("/rooms", middlewares.IsAuth, roomHandler.CreateRoom)
-	app.Patch("/rooms", middlewares.IsAuth, roomHandler.EditRoom)
-	app.Delete("/rooms", middlewares.IsAuth, roomHandler.DeleteRoom)
+	api.Get("/rooms", middlewares.IsAuth, roomHandler.GetRoomList)
+	api.Post("/rooms", middlewares.IsAuth, roomHandler.CreateRoom)
+	api.Patch("/rooms", middlewares.IsAuth, roomHandler.EditRoom)
+	api.Delete("/rooms", middlewares.IsAuth, roomHandler.DeleteRoom)
 
-	app.Patch("/users", middlewares.IsAuth, userHandler.ChangeUsername)
-	app.Patch("/users/password", middlewares.IsAuth, userHandler.ChangePassword)
+	app.Get("/ws/:room_code", adaptor.HTTPHandlerFunc(manager.ServeWS)) // websocket connection
+	api.Get("/messages/:room_code", middlewares.IsAuth, messageHandler.GetMessageByRoom)
+	api.Post("/messages", middlewares.IsAuth, messageHandler.SaveNewMessage)
 
+	api.Patch("/users", middlewares.IsAuth, userHandler.ChangeUsername)
+	api.Patch("/users/password", middlewares.IsAuth, userHandler.ChangePassword)
+
+	// setup graceful shutdown
+	// ctx, cancel := context.WithCancel(context.Background())
+	// sig := make(chan os.Signal, 1)
+	// signal.Notify(sig, os.Interrupt)
+	// signal.Notify(sig, syscall.SIGTERM)
+
+	// go func() {
+	// 	<-sig
+	// 	log.Println("Shutting down app")
+	// 	time.Sleep(5 * time.Second)
+	// 	cancel()
+	// }()
+
+	// go func() {
 	// if using tls for https for accomodate wss in websocket can use below code to using it on local development, because browser will block wss connection if not using https
 	// and when deploy on like gcp can just use app.Listen, because gcp will handle tls for us and the wss can still work
+
 	if os.Getenv("APP_ENV") == "development" {
 		log.Println("Running on development mode")
 		if err := app.ListenTLS(":3000", "server.crt", "server.key"); err != nil {
@@ -112,4 +118,15 @@ func main() {
 	} else {
 		log.Println("APP_ENV not set")
 	}
+	// }()
+
+	// <-ctx.Done()
+
+	// shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	// defer cancel()
+
+	// if err := app.ShutdownWithContext(shutdownCtx); err != nil {
+	// 	log.Fatal("Error when shutting down app, error: " + err.Error())
+	// }
+	// log.Println("App is down")
 }

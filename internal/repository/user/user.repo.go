@@ -18,7 +18,7 @@ func (r *UserRepo) FindByID(tx *sql.Tx, id int) (*models.User, error) {
 	query := "SELECT id, username, password FROM users WHERE id = $1"
 
 	if err := tx.QueryRow(query, id).Scan(&user.Id, &user.Username, &user.Password); err != nil && err != sql.ErrNoRows {
-		return &models.User{}, err
+		return &user, err
 	}
 
 	return &user, nil
@@ -30,7 +30,7 @@ func (r *UserRepo) FindByUsername(tx *sql.Tx, username string) (*models.User, er
 	query := "SELECT id, username, password FROM users WHERE username = $1"
 
 	if err := tx.QueryRow(query, username).Scan(&user.Id, &user.Username, &user.Password); err != nil && err != sql.ErrNoRows {
-		return &models.User{}, err
+		return &user, err
 	}
 
 	return &user, nil

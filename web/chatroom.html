@@ -1,0 +1,285 @@
+{{ template "components/_header" . }}
+    <div class="container py-5">
+        <h1 class="text-center mb-5">🟢 Chat menge-Chat, brol Meng-obrol</h1>
+
+        <div class="card shadow-sm mx-auto" style="max-width: 600px;">
+            <div class="card-body">
+                <!-- Chat Room Information -->
+                <div class="room-info mb-4">
+                    <h4>🟢 Current Room: <span class="text-primary" id="room-name">Room Name</span></h4>
+                    <h6>Room Code: <span class="text-primary" id="room-id">XXX</span></h6>
+                    <p><strong>Description:</strong> <span id="room-description">Room Description</span></p>
+                    <p><strong>Owner:</strong> <span class="text-success" id="room-owner">Room Owner</span></p>
+                </div>
+
+                <!-- User Information -->
+                <input type="hidden" id="user-id" value="{{ .User.Id }}" disabled>
+                <h4 id="user-name" class="text-center mb-3">Logged in as: <span id="username" class="text-success">{{ .User.Username }}</span></h4>
+
+                <!-- Chat Area -->
+                <div id="messagearea" class="chat-area mb-4">
+                    <!-- Messages will appear here -->
+                </div>
+
+                <!-- Chat Input -->
+                <form id="chatroom-message">
+                    <div class="mb-3">
+                        <label for="message" class="form-label">Message</label>
+                        <input type="text" id="message" name="message" class="form-control" placeholder="Type your message" required>
+                    </div>
+                    <button type="submit" class="btn btn-success w-100">Send Message</button>
+                </form>
+
+                <!-- Change Room Form -->
+                <hr class="my-4">
+                <div class="text-center">
+                    <a href="/" class="btn btn-secondary w-100">Back to Dashboard</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    {{ template "components/_footer-script" . }} 
+
+    {{ template "components/_loading" . }}
+
+    <script>
+        // // // CONST
+        // EVENT TYPE
+        const CHANGE_ROOM = "change_room"
+        const SEND_MESSAGE = "send_message"
+        const NEW_MESSAGE = "new_message"
+
+        // CHAT CONSTANTS
+        let MY_NAME = $("#username").text()
+        let SENDER_NAME = MY_NAME
+        const USER_ID = $("#user-id").val()
+
+        // get path room code from url 
+        const FULL_PATH = window.location.pathname
+        const PATH_ROOM = FULL_PATH.split("/")
+        const ROOM_CODE = PATH_ROOM[PATH_ROOM.length - 1]
+
+        // url
+        const BASE_URL = "/api/messages"
+        const ROOM_URL = BASE_URL + "/" + ROOM_CODE
+
+        // MAIN WEBSOCKET CONNECTION FUNCTION
+        class Event {
+            constructor(type, payload) {
+                this.type = type
+                this.payload = payload
+            }
+        }
+
+        class SendMessageEvent {
+            constructor(message, from) {
+                this.message = message
+                this.from = from
+            }
+        }
+
+        class NewMessageEvent {
+            constructor(message, from, sent) {
+                this.message = message
+                this.from = from
+                this.sent = sent
+            }
+        }
+
+        function routeEvent(event) {
+            if(event.type === undefined) alert("Event Received: " + event.type)
+
+            switch(event.type) {
+                case NEW_MESSAGE:
+                    const messageEvent = Object.assign(new NewMessageEvent, event.payload)
+                    appendChatMessage(messageEvent)
+                    break
+                default:
+                    alert("Event Received: " + event.type + " (unsupported event type)")
+                    break
+            }
+        }
+
+        function appendChatMessage(messageEvent) {
+            const date = new Date(messageEvent.sent)
+            const formattedTime = date.toLocaleTimeString()
+            const isSelf = messageEvent.from === MY_NAME // check if the message is from the user
+
+            // crate chat bubble element
+            const messageElement = $(`
+                <div class="message ${isSelf ? 'sent' : 'received'}">
+                    <div class="message-content ${isSelf ? 'sent' : 'received'}">
+                        ${messageEvent.message}
+                        <div class="message-info">${messageEvent.from} ${isSelf ? '(You)' : ''} • ${formattedTime}</div>
+                    </div>
+                </div>
+            `)
+
+            // add the chat bubble to the chat area
+            $('#messagearea').append(messageElement)
+            $('#messagearea').scrollTop($('#messagearea')[0].scrollHeight) // scroll to the bottom of the chat area
+        }
+
+        function sendEvent(eventName, payload) {
+            const event = new Event(eventName, payload)
+
+            // send the event message to server with websocket connection
+            conn.send(JSON.stringify(event))
+        }
+
+        function sendMessage() {
+            const newMessage = $('#message').val();
+            if (newMessage !== null && newMessage.trim() !== "") {
+                // send message to the server with send event
+
+                // first setup the format for the message event
+                let outgoingEvent = new SendMessageEvent(newMessage, SENDER_NAME)
+
+                // send the message event to the server
+                sendEvent(SEND_MESSAGE, outgoingEvent)
+                $('#message').val('')
+            }
+            return false;
+        }
+
+        // function for API CALL
+        async function getRoomData() {
+            showLoader()
+
+            try {
+                const resp = await fetch("/api/rooms/" + ROOM_CODE, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                })
+                const response = await resp.json()
+                
+                if (response.error) throw new Error(response.message)
+                else {
+                    // append the messages to the chat area
+                    const room = response.data.room 
+                    $('#room-name').text(room.room_name)
+                    $('#room-id').text(room.room_code)
+                    $('#room-description').text(room.description)
+                    $('#room-owner').text(room.username)
+                }
+
+            } catch(e) {
+                alert("Failed to fetch room data: " + e.message)
+                setTimeout(() => {
+                    window.location.href = "/"
+                }, 1500)
+            } finally {
+                hideLoader()
+            }
+        }
+
+        async function getRoomChatAPI() {
+            showLoader()
+
+            try {
+                const resp = await fetch(ROOM_URL, {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                })
+                const response = await resp.json()
+                
+                if (response.error) throw new Error(response.message)
+                else {
+                    // append the messages to the chat area
+                    const messages = response.data.messages
+                    if (messages.length > 0) {
+                        response.data.messages.forEach(message => {
+                            const data = {
+                                message: message.content,
+                                from: message.sender_username,
+                                sent: message.created_at
+                            }
+                            const messageData = Object.assign(new NewMessageEvent, data)
+                            appendChatMessage(messageData)
+                        })
+                    }
+                }
+                
+            } catch (error) {
+                alert("Failed to fetch room data: " + error.message)
+            } finally {
+                hideLoader()
+            }
+        }
+
+        async function sendMessageAPI() {
+            event.preventDefault()
+
+            const newMessage = $('#message').val();
+
+            const messageBody = JSON.stringify({
+                room_code : ROOM_CODE,
+                sender_id : parseInt(USER_ID),
+                content: newMessage
+            })
+
+            showLoader()
+
+            try {
+                const resp = await fetch(BASE_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: messageBody
+                })
+                const response = await resp.json()
+
+                if (response.error) throw new Error(response.message)
+                else sendMessage() // send the message to the server
+
+            } catch (e) {
+                alert("Failed to send message: " + e.message)
+            } finally {
+                hideLoader()
+            }
+        }
+
+        $("document").ready(async function() {
+            hideLoader()
+            await getRoomData()
+            getRoomChatAPI()
+            
+
+            $('#chatroom-message').submit(sendMessageAPI)
+
+            if (window["WebSocket"]) {
+                // connect to websocket 
+
+                // protocol available ws:// or wss:// with extra s just like http and https and also the extra s need to be used when the server is using SSL certificate
+
+                // using /ws after the host name to connect to the websocket server just normal pratice on the server side to use /ws to handle websocket connections
+                conn = new WebSocket("wss://" + document.location.host + "/ws/" + ROOM_CODE)
+                console.log("Connecting to websocket server ROOM CODE: " + ROOM_CODE)
+
+                conn.onmessage = function(evt) {
+                    // receive the event message from the server and parse it 
+                    const eventData = JSON.parse(evt.data)
+
+                    // route the event to the correct handler
+                    const event = Object.assign(new Event, eventData)
+
+                    // handle the event
+                    routeEvent(event)
+                }
+
+
+            } else {
+                alert("WebSocket is not supported by your browser!")
+            }
+        });
+    </script>
+
+</body>
+
+</html>
