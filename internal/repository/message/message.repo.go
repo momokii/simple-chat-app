@@ -2,7 +2,7 @@ package message
 
 import (
 	"database/sql"
-	"fmt"
+	"errors"
 
 	"github.com/momokii/simple-chat-app/internal/models"
 )
@@ -17,7 +17,7 @@ func (r *MessageRepo) FindByRoom(tx *sql.Tx, roomId int) (*[]models.MessageShow,
 	var messages []models.MessageShow
 
 	if roomId < 1 {
-		return &messages, fmt.Errorf("room ID is required")
+		return &messages, errors.New("Room ID is required")
 	}
 
 	query := "SELECT m.id, m.room_id, u.username, m.content, m.created_at FROM messages m LEFT JOIN users u ON m.sender_id = u.id WHERE room_id = $1 ORDER BY created_at ASC"

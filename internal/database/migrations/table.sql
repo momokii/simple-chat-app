@@ -27,3 +27,11 @@ CREATE TABLE messages (
 -- index for table users
 CREATE INDEX idx_messages_room_id ON messages(room_id);
 CREATE INDEX idx_messages_created_at ON messages(created_at);
+
+CREATE TABLE room_members (
+    id SERIAL PRIMARY KEY,
+    room_id INT NOT NULL REFERENCES room_chat(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (room_id, user_id)
+);

@@ -1,4 +1,5 @@
 {{ template "components/_header" . }}
+<body>
     <div class="container py-5">
         <h1 class="text-center mb-5">🟢 Chat menge-Chat, brol Meng-obrol</h1>
 
@@ -6,10 +7,32 @@
             <div class="card-body">
                 <!-- Chat Room Information -->
                 <div class="room-info mb-4">
-                    <h4>🟢 Current Room: <span class="text-primary" id="room-name">Room Name</span></h4>
+                    <h4>Current Room: <span class="text-primary" id="room-name">Room Name</span></h4>
                     <h6>Room Code: <span class="text-primary" id="room-id">XXX</span></h6>
                     <p><strong>Description:</strong> <span id="room-description">Room Description</span></p>
                     <p><strong>Owner:</strong> <span class="text-success" id="room-owner">Room Owner</span></p>
+                    <button id="roomMember" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#memberModal">User Joined Room</button>
+                </div>
+
+                <!-- Modal Member List-->
+                <div id="memberModal" class="modal fade" tabindex="-1" role="dialog">
+                    <div class="modal-dialog modal-dialog-centered" role="document">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">Room Members</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
+                                <p class="text-muted" id="memberModalBodyNoAvail">No other user joined this room</p>
+                                <ul id="member-list" class="list-group">
+                                    <!-- Members will be dynamically populated here -->
+                                </ul>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- User Information -->
@@ -43,6 +66,8 @@
 
     {{ template "components/_loading" . }}
 
+    {{ template "components/_modal-infor" . }}
+
     <script>
         // // // CONST
         // EVENT TYPE
@@ -65,7 +90,7 @@
         const ROOM_URL = BASE_URL + "/" + ROOM_CODE
 
         // MAIN WEBSOCKET CONNECTION FUNCTION
-        class Event {
+        class EventWS {
             constructor(type, payload) {
                 this.type = type
                 this.payload = payload
@@ -88,15 +113,14 @@
         }
 
         function routeEvent(event) {
-            if(event.type === undefined) alert("Event Received: " + event.type)
-
+            if(event.type === undefined) showInfoModal('Event Received: ' + event.type, 'Error')
             switch(event.type) {
                 case NEW_MESSAGE:
                     const messageEvent = Object.assign(new NewMessageEvent, event.payload)
                     appendChatMessage(messageEvent)
                     break
                 default:
-                    alert("Event Received: " + event.type + " (unsupported event type)")
+                    showInfoModal('Event Received: ' + event.type + ' (unsupported event type)', 'Error')
                     break
             }
         }
@@ -122,7 +146,7 @@
         }
 
         function sendEvent(eventName, payload) {
-            const event = new Event(eventName, payload)
+            const event = new EventWS(eventName, payload)
 
             // send the event message to server with websocket connection
             conn.send(JSON.stringify(event))
@@ -160,14 +184,32 @@
                 else {
                     // append the messages to the chat area
                     const room = response.data.room 
+                    const members = response.data.members
+
                     $('#room-name').text(room.room_name)
                     $('#room-id').text(room.room_code)
                     $('#room-description').text(room.description)
                     $('#room-owner').text(room.username)
+
+                    if (members.length > 0) {
+                        $('#memberModalBodyNoAvail').hide()
+                        members.forEach(member => {
+                            const join_date = new Date(member.created_at).toLocaleDateString('en-US', { 
+                                year: 'numeric', month: 'long', day: 'numeric' 
+                            }) 
+                            
+                            $("#member-list").append(
+                                $("<li>")
+                                    .addClass("list-group-item")
+                                    .html(`<b>${member.username}</b> (Joined: <b>${join_date}</b>)`)
+                            )
+                        })
+                    }
+
                 }
 
             } catch(e) {
-                alert("Failed to fetch room data: " + e.message)
+                showInfoModal('Failed to fetch room data: ' + e.message, 'Error')
                 setTimeout(() => {
                     window.location.href = "/"
                 }, 1500)
@@ -177,8 +219,6 @@
         }
 
         async function getRoomChatAPI() {
-            showLoader()
-
             try {
                 const resp = await fetch(ROOM_URL, {
                     method: 'GET',
@@ -206,9 +246,7 @@
                 }
                 
             } catch (error) {
-                alert("Failed to fetch room data: " + error.message)
-            } finally {
-                hideLoader()
+                showInfoModal('Failed to fetch room data: ' + error.message, 'Error')
             }
         }
 
@@ -239,7 +277,7 @@
                 else sendMessage() // send the message to the server
 
             } catch (e) {
-                alert("Failed to send message: " + e.message)
+                showInfoModal('Failed to send message: ' + e.message, 'Error')
             } finally {
                 hideLoader()
             }
@@ -260,14 +298,14 @@
 
                 // using /ws after the host name to connect to the websocket server just normal pratice on the server side to use /ws to handle websocket connections
                 conn = new WebSocket("wss://" + document.location.host + "/ws/" + ROOM_CODE)
-                console.log("Connecting to websocket server ROOM CODE: " + ROOM_CODE)
+                // console.log("Connecting to websocket server ROOM CODE: " + ROOM_CODE)
 
                 conn.onmessage = function(evt) {
                     // receive the event message from the server and parse it 
                     const eventData = JSON.parse(evt.data)
 
                     // route the event to the correct handler
-                    const event = Object.assign(new Event, eventData)
+                    const event = Object.assign(new EventWS, eventData)
 
                     // handle the event
                     routeEvent(event)
@@ -275,7 +313,7 @@
 
 
             } else {
-                alert("WebSocket is not supported by your browser!")
+                showInfoModal('WebSocket is not supported by your browser!', 'Error')
             }
         });
     </script>

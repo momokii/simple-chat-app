@@ -13,7 +13,7 @@ func NewRoomChatRepo() *RoomChatRepo {
 	return &RoomChatRepo{}
 }
 
-func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_room, filter, search string) (*[]models.RoomChatDataShow, int, error) {
+func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_room, is_room_joined, filter, search string) (*[]models.RoomChatDataShow, int, error) {
 	var rooms []models.RoomChatDataShow
 	var filterType string
 	offset := (page - 1) * per_page
@@ -29,6 +29,17 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 			return &rooms, 0, fmt.Errorf("User ID is required")
 		}
 		addQuery := " AND rc.created_by = $" + fmt.Sprint(idxParam)
+
+		total_query += addQuery
+		query += addQuery
+
+		idxParam++
+		paramData = append(paramData, user_id)
+	} else if is_room_joined == "true" {
+		if user_id < 1 {
+			return &rooms, 0, fmt.Errorf("User ID is required")
+		}
+		addQuery := " AND rc.id IN (SELECT room_id FROM room_members WHERE user_id = $" + fmt.Sprint(idxParam) + ")"
 
 		total_query += addQuery
 		query += addQuery
