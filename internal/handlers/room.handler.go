@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"log"
 	"math"
 
 	"github.com/go-playground/validator/v10"
@@ -9,16 +10,19 @@ import (
 	"github.com/momokii/simple-chat-app/internal/database"
 	"github.com/momokii/simple-chat-app/internal/models"
 	"github.com/momokii/simple-chat-app/internal/repository/room"
+	roommember "github.com/momokii/simple-chat-app/internal/repository/room_member"
 	"github.com/momokii/simple-chat-app/pkg/utils"
 )
 
 type RoomChatHandler struct {
-	roomChatRepo room.RoomChatRepo
+	roomChatRepo   room.RoomChatRepo
+	roomMemberRepo roommember.RoomMemberRepo
 }
 
-func NewRoomChatHandler(roomChatRepo room.RoomChatRepo) *RoomChatHandler {
+func NewRoomChatHandler(roomChatRepo room.RoomChatRepo, roomMemberRepo roommember.RoomMemberRepo) *RoomChatHandler {
 	return &RoomChatHandler{
-		roomChatRepo: roomChatRepo,
+		roomChatRepo:   roomChatRepo,
+		roomMemberRepo: roomMemberRepo,
 	}
 }
 
@@ -53,6 +57,7 @@ func (h *RoomChatHandler) GetRoomData(c *fiber.Ctx) error {
 	defer func() {
 		database.CommitOrRollback(tx, c, err)
 	}()
+
 	// check if roomExist
 	roomData, err := h.roomChatRepo.FindByCodeOrAndId(tx, roomCode, 0)
 	if err != nil {
@@ -63,8 +68,19 @@ func (h *RoomChatHandler) GetRoomData(c *fiber.Ctx) error {
 		return utils.ResponseError(c, fiber.StatusBadRequest, "Room is not exist")
 	}
 
+	// get list member data of the room
+	members, err := h.roomMemberRepo.FindByRoom(tx, roomData.Id)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get room member list")
+	}
+
+	if len(*members) == 0 {
+		members = &[]models.RoomMemberShow{}
+	}
+
 	return utils.ResponseWithData(c, fiber.StatusOK, "Success Get Room Data", fiber.Map{
-		"room": roomData,
+		"room":    roomData,
+		"members": members,
 	})
 }
 
@@ -77,6 +93,10 @@ func (h *RoomChatHandler) GetRoomList(c *fiber.Ctx) error {
 	is_user_room := c.Query("self")
 	if is_user_room != "true" {
 		is_user_room = "false"
+	}
+	is_room_joined := c.Query("joined")
+	if is_room_joined != "true" {
+		is_room_joined = "false"
 	}
 	filter := c.Query("filter")
 	search := c.Query("search")
@@ -97,7 +117,7 @@ func (h *RoomChatHandler) GetRoomList(c *fiber.Ctx) error {
 		database.CommitOrRollback(tx, c, err)
 	}()
 
-	rooms, total, err := h.roomChatRepo.Find(tx, user.Id, page, per_page, is_user_room, filter, search)
+	rooms, total, err := h.roomChatRepo.Find(tx, user.Id, page, per_page, is_user_room, is_room_joined, filter, search)
 	if err != nil {
 		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get room list")
 	}
@@ -284,4 +304,105 @@ func (h *RoomChatHandler) DeleteRoom(c *fiber.Ctx) error {
 	}
 
 	return utils.ResponseMessage(c, fiber.StatusOK, "Success Delete Room")
+}
+
+// --- below for room member related function ---
+func (h *RoomChatHandler) AddJoinRoom(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	memberInput := new(models.RoomMemberCreate)
+	if err := c.BodyParser(memberInput); err != nil {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Invalid request")
+	}
+
+	if err := utils.ValidateStruct(memberInput); err != nil {
+		for _, err := range err.(validator.ValidationErrors) {
+			switch err.Field() {
+			case "RoomId":
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Room ID must be numeric and required")
+			}
+		}
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to start transaction")
+	}
+	defer func() {
+		database.CommitOrRollback(tx, c, err)
+	}()
+
+	// check if room is exist
+	roomCheck, err := h.roomChatRepo.FindByCodeOrAndId(tx, "", memberInput.RoomId)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to check room")
+	}
+
+	if roomCheck.Id == 0 {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Room is not exist")
+	}
+
+	// check if user is already in the room
+	exist, err := h.roomMemberRepo.FindUserInRoom(tx, user.Id, memberInput.RoomId)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to check user in room")
+	}
+
+	// if not exist so add user to the room
+	if !exist {
+		newMember := models.RoomMember{
+			RoomId: memberInput.RoomId,
+			UserId: user.Id,
+		}
+
+		if err := h.roomMemberRepo.Create(tx, &newMember); err != nil {
+			log.Println(err)
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to join room")
+		}
+	}
+
+	return utils.ResponseMessage(c, fiber.StatusOK, "Success Join Room")
+}
+
+func (h *RoomChatHandler) RemoveRoomMember(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	delInput := new(models.RoomMemberCreate)
+	if err := c.BodyParser(delInput); err != nil {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Invalid request")
+	}
+
+	if err := utils.ValidateStruct(delInput); err != nil {
+		for _, err := range err.(validator.ValidationErrors) {
+			switch err.Field() {
+			case "RoomId":
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Room ID must be numeric and required")
+			}
+		}
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to start transaction")
+	}
+	defer func() {
+		database.CommitOrRollback(tx, c, err)
+	}()
+
+	// check if room is exist
+	roomCheck, err := h.roomChatRepo.FindByCodeOrAndId(tx, "", delInput.RoomId)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to check room")
+	}
+
+	if roomCheck.Id == 0 {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Room is not exist")
+	}
+
+	// delete user from room member
+	if err := h.roomMemberRepo.Delete(tx, user.Id, delInput.RoomId); err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to remove room member")
+	}
+
+	return utils.ResponseMessage(c, fiber.StatusOK, "Success Remove Room Member")
 }

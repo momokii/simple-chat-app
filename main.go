@@ -14,6 +14,7 @@ import (
 	"github.com/momokii/simple-chat-app/internal/middlewares"
 	"github.com/momokii/simple-chat-app/internal/repository/message"
 	"github.com/momokii/simple-chat-app/internal/repository/room"
+	roommember "github.com/momokii/simple-chat-app/internal/repository/room_member"
 	"github.com/momokii/simple-chat-app/internal/repository/user"
 	"github.com/momokii/simple-chat-app/internal/ws"
 
@@ -29,10 +30,11 @@ func main() {
 	userRepo := user.NewUserRepo()
 	roomRepo := room.NewRoomChatRepo()
 	messageRepo := message.NewMessageRepo()
+	roomemberRepo := roommember.NewRoomMember()
 
 	// handler init
 	authHandler := handlers.NewAuthHandler(*userRepo)
-	roomHandler := handlers.NewRoomChatHandler(*roomRepo)
+	roomHandler := handlers.NewRoomChatHandler(*roomRepo, *roomemberRepo)
 	userHandler := handlers.NewUserHandler(*userRepo)
 	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo)
 
@@ -63,10 +65,6 @@ func main() {
 	// dashboard
 	app.Get("/", middlewares.IsAuth, roomHandler.RoomMainDashboardView)
 
-	// room page
-	app.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.RoomChatView)
-	api.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.GetRoomData)
-
 	// base http route
 	app.Get("/login", middlewares.IsNotAuth, authHandler.LoginView)
 	api.Post("/login", middlewares.IsNotAuth, authHandler.Login)
@@ -76,10 +74,16 @@ func main() {
 
 	api.Post("/logout", middlewares.IsAuth, authHandler.Logout)
 
+	// room page
+	app.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.RoomChatView)
+	api.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.GetRoomData)
 	api.Get("/rooms", middlewares.IsAuth, roomHandler.GetRoomList)
 	api.Post("/rooms", middlewares.IsAuth, roomHandler.CreateRoom)
 	api.Patch("/rooms", middlewares.IsAuth, roomHandler.EditRoom)
 	api.Delete("/rooms", middlewares.IsAuth, roomHandler.DeleteRoom)
+
+	api.Post("/rooms/members", middlewares.IsAuth, roomHandler.AddJoinRoom)
+	api.Delete("/rooms/members", middlewares.IsAuth, roomHandler.RemoveRoomMember)
 
 	app.Get("/ws/:room_code", adaptor.HTTPHandlerFunc(manager.ServeWS)) // websocket connection
 	api.Get("/messages/:room_code", middlewares.IsAuth, messageHandler.GetMessageByRoom)
