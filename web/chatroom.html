@@ -6,13 +6,43 @@
         <div class="card shadow-sm mx-auto" style="max-width: 600px;">
             <div class="card-body">
                 <!-- Chat Room Information -->
-                <div class="room-info mb-4">
-                    <h4>Current Room: <span class="text-primary" id="room-name">Room Name</span></h4>
-                    <h6>Room Code: <span class="text-primary" id="room-id">XXX</span></h6>
-                    <p><strong>Description:</strong> <span id="room-description">Room Description</span></p>
-                    <p><strong>Owner:</strong> <span class="text-success" id="room-owner">Room Owner</span></p>
-                    <button id="roomMember" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#memberModal">User Joined Room</button>
+                <div class="room-info mb-4 p-3 rounded shadow-sm border">
+                    <h4 class="mb-3">
+                        Current Room: 
+                        <span class="text-primary fw-bold" id="room-name">Room Name</span>
+                    </h4>
+                    <h6 class="mb-3">
+                        Room Code: 
+                        <span class="text-primary fw-bold" id="room-id">XXX</span>
+                    </h6>
+                    <p class="mb-2">
+                        <strong>Description:</strong> 
+                        <span id="room-description">Room Description</span>
+                    </p>
+                    <p class="mb-2">
+                        <strong>Owner:</strong> 
+                        <span class="text-success fw-bold" id="room-owner">Room Owner</span>
+                    </p>
+                    <p class="mb-3">
+                        <strong>Room Type:</strong> 
+                        <span 
+                            id="room-type" 
+                            class="fw-bold" 
+                            style="color: var(--bs-danger, red);"
+                        >
+                            Private Room 🔒
+                        </span>
+                    </p>
+                    <button 
+                        id="roomMember" 
+                        class="btn btn-outline-info btn-sm" 
+                        data-bs-toggle="modal" 
+                        data-bs-target="#memberModal"
+                    >
+                        User Joined Room
+                    </button>
                 </div>
+                
 
                 <!-- Modal Member List-->
                 <div id="memberModal" class="modal fade" tabindex="-1" role="dialog">
@@ -185,11 +215,33 @@
                     // append the messages to the chat area
                     const room = response.data.room 
                     const members = response.data.members
+                    // for now, the mechanism to check if the user is a member of the room is by checking the user_id -> prevent bypass by changing the room code in the URL
+                    // just check when the room is private and the user is not the owner
+                    if ((room.is_private) && (room.username !== MY_NAME)) {
+                        const user_id = parseInt(USER_ID)
+                        let is_member = false
+                        for (member of members) {
+                            if (member.user_id === user_id) {
+                                SENDER_NAME = member.username
+                                is_member = true
+                                break
+                            }
+                        }
 
+                        if (!is_member) throw new Error('<b>Room is Private & you are not a member of this room</b>')
+                    }
+                    
                     $('#room-name').text(room.room_name)
                     $('#room-id').text(room.room_code)
                     $('#room-description').text(room.description)
                     $('#room-owner').text(room.username)
+                    if (room.is_private) {
+                        $('#room-type').text('Private Room 🔒')
+                        $('#room-type').css('color', 'var(--bs-danger, red)')
+                    } else {
+                        $('#room-type').text('Public Room 🔓')
+                        $('#room-type').css('color', 'var(--bs-success, green)')
+                    }
 
                     if (members.length > 0) {
                         $('#memberModalBodyNoAvail').hide()

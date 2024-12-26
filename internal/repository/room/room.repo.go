@@ -20,7 +20,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 	total := 0
 
 	total_query := "SELECT COUNT(rc.id) FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1 = 1"
-	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1 = 1"
+	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at, rc.is_private FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1 = 1"
 
 	idxParam := 1
 	paramData := []interface{}{}
@@ -86,7 +86,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 	for rows.Next() {
 		var room models.RoomChatDataShow
 
-		if err := rows.Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt); err != nil {
+		if err := rows.Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt, &room.IsPrivate); err != nil {
 			return &rooms, total, err
 		}
 
@@ -103,7 +103,7 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 		return &room, fmt.Errorf("Code or/and ID is required")
 	}
 
-	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1=1"
+	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at, rc.is_private, rc.password FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1=1"
 
 	idx := 1
 	paramData := []interface{}{}
@@ -119,7 +119,7 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 		paramData = append(paramData, id)
 	}
 
-	if err := tx.QueryRow(query, paramData...).Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt); err != nil && err != sql.ErrNoRows {
+	if err := tx.QueryRow(query, paramData...).Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt, &room.IsPrivate, &room.Password); err != nil && err != sql.ErrNoRows {
 		return &room, err
 	}
 
@@ -127,19 +127,34 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 }
 
 func (r *RoomChatRepo) Create(tx *sql.Tx, room *models.RoomChat) error {
-	query := "INSERT INTO room_chat (code, created_by, name, description) VALUES ($1, $2, $3, $4)"
+	query := "INSERT INTO room_chat (code, created_by, name, description, password, is_private) VALUES ($1, $2, $3, $4, $5, $6)"
 
-	if _, err := tx.Exec(query, room.RoomCode, room.CreatedBy, room.RoomName, room.Description); err != nil {
+	if _, err := tx.Exec(query, room.RoomCode, room.CreatedBy, room.RoomName, room.Description, room.Password, room.IsPrivate); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (r *RoomChatRepo) Update(tx *sql.Tx, room *models.RoomChat) error {
-	query := "UPDATE room_chat SET name = $1, description = $2, updated_at = NOW() WHERE id = $3"
+func (r *RoomChatRepo) Update(tx *sql.Tx, room *models.RoomChat, is_update_password bool) error {
 
-	if _, err := tx.Exec(query, room.RoomName, room.Description, room.Id); err != nil {
+	paramData := []interface{}{room.RoomName, room.Description, room.IsPrivate, room.Id}
+	paramCount := len(paramData)
+
+	query := "UPDATE room_chat SET name = $1, description = $2, updated_at = NOW(), password = "
+
+	if is_update_password {
+		paramCount++
+		paramData = append(paramData, room.Password)
+
+		query += "$" + fmt.Sprint(paramCount)
+	} else {
+		query += "password"
+	}
+
+	query += ", is_private = $3 WHERE id = $4"
+
+	if _, err := tx.Exec(query, paramData...); err != nil {
 		return err
 	}
 

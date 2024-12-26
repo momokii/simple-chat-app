@@ -104,6 +104,10 @@
                 </div>
                 <div class="modal-body">
                     <form id="createRoomForm">
+                        <div class="alert alert-info" role="alert">
+                            Leave the password field empty to create a public room. Fill in the password to create a private room.
+                        </div>
+
                         <div class="mb-3">
                             <label for="roomName" class="form-label">Room Name</label>
                             <input type="text" class="form-control" id="roomName" placeholder="Enter room name" required maxlength="30" minlength="1">
@@ -111,6 +115,14 @@
                         <div class="mb-3">
                             <label for="roomDescription" class="form-label">Room description</label>
                             <textarea class="form-control" id="roomDescription" placeholder="Enter room description" required maxlength="140" minlength="1" rows="4"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="passwordRoomCreate" class="form-label">Password (Optional)</label>
+                            <input type="password" class="form-control" id="passwordRoomCreate"></input>
+                        </div>
+                        <div class="mb-3">
+                            <label for="confirmPasswordRoomCreate" class="form-label">Confirm Password</label>
+                            <input type="password" class="form-control" id="confirmPasswordRoomCreate"></input>
                         </div>
                         <button type="submit" class="btn btn-success">Create Room</button>
                     </form>
@@ -208,8 +220,28 @@
                             <label for="roomDescriptionEdit" class="form-label">Room description</label>
                             <textarea class="form-control" id="roomDescriptionEdit" placeholder="Enter room description" required maxlength="140" minlength="1" rows="4"></textarea>
                         </div>
-                        <button type="submit" class="btn btn-success">Edit Room</button>
-                    </form>
+                        <div class="mb-3">
+                            <label for="isPrivateEdit" class="form-label">Room Type</label>
+                            <select class="form-control" id="isPrivateEdit">
+                                <option value="false">Public</option>
+                                <option value="true">Private</option>
+                            </select>
+                        </div>
+                        <div id="passwordFields" class="d-none">
+                            <div class="alert alert-info" role="alert">
+                                <strong>Note:</strong> If the room remains private and the password is left blank, the current password will not change.
+                            </div>
+                            <div class="mb-3">
+                                <label for="editPassword" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="editPasswordRoom" placeholder="Enter password">
+                            </div>
+                            <div class="mb-3">
+                                <label for="editConfirmPassword" class="form-label">Confirm Password</label>
+                                <input type="password" class="form-control" id="editConfirmPasswordRoom" placeholder="Confirm password">
+                            </div>
+                        </div>
+                        <button type="submit" id="editRoomBtn" class="btn btn-success">Edit Room</button>
+                    </form>                    
                 </div>
             </div>
         </div>
@@ -255,6 +287,47 @@
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                     <button type="button" class="btn btn-danger" id="confirmExitBtn">Yes, Exit</button>
                 </div>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Modal Enter Password enter Private Room -->
+    <div class="modal fade" id="enterPassPrivateRoom" tabindex="-1" aria-labelledby="enterPassPrivateRoomLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="enterPassPrivateRoomLabel">Enter Password Private Room</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <h5 class="modal-title mb-3 text-center">Join Private Room</h5>
+                    <p class="text-muted text-center">
+                        Please enter the password to join the private room.
+                    </p>
+                    <div class="alert alert-info text-center" role="alert">
+                        Room Code: <strong id="roomCodePrivateJoin"></strong>
+                    </div>
+                    <form id="enterPasswordPrivateRoomForm">
+                        <div class="mb-3">
+                            <label for="inputPassPrivateRoom" class="form-label">Password</label>
+                            <input 
+                                type="password" 
+                                class="form-control"  
+                                id="inputPassPrivateRoom" 
+                                placeholder="Enter password to join" 
+                                required 
+                                autofocus>
+                            <div class="form-text">
+                                Password is case-sensitive. Make sure it's correct.
+                            </div>
+                        </div>
+                        <div class="d-flex justify-content-end">
+                            <button type="submit" class="btn btn-success">Enter</button>
+                        </div>
+                    </form>
+                </div>
+                
             </div>
         </div>
     </div>
@@ -385,6 +458,7 @@
                     roomList.append('<p class="text-muted">No room available</p>')
                 } else {
                     roomData.forEach(room => {
+
                         let is_owner = false
 
                         // if user is owner or user is on joined room tab set is_owner to true and this make button for the room is "open" button notn "join" button
@@ -401,10 +475,15 @@
                         `
 
                         // ------- EDIT DELETE BUTTON ROOM
+                        // button join or open room for the condition if user is owner/ already joined the room or not
+                        let button_join = `<button onClick="openRoom('${room.room_code}', '${room.id}', ${is_owner}, ${room.is_private})" class="btn btn-success btn-sm mt-2">Join</button>`
+                        
+                        if (is_owner) button_join = `<a href="/rooms/${room.room_code}" class="btn btn-primary btn-sm mt-2">Open</a>`
+
                         // add delete and edit button if user is owner for the "my room" tab
                         let buttonRoom = `
                             <div class="room-actions">
-                                <button class="btn btn-sm btn-warning" onclick="openEditModal(${room.id}, '${room.room_code}', '${room.room_name}', '${room.description}')">Edit</button>
+                                <button class="btn btn-sm btn-warning" onclick="openEditModal(${room.id}, '${room.room_code}', '${room.room_name}', '${room.description}', ${room.is_private})">Edit</button>
                                 <button class="btn btn-sm btn-danger" onclick="openDeleteModal(${room.id}, '${room.room_code}')">Delete</button>
                             </div>
                         `
@@ -416,22 +495,31 @@
                         // add button for delete and edit room if user is owner (basically just using it on "my room" tab)
                         if (self) roomCard += buttonRoom
 
-                        // button join or open room for the condition if user is owner/ already joined the room or not
-                        let button_join = `<button onClick="openRoom('${room.room_code}', '${room.id}', '${is_owner}')" class="btn btn-success btn-sm mt-2">Join</button>`
-                        
-                        if (is_owner) button_join = `<a href="/rooms/${room.room_code}" class="btn btn-primary btn-sm mt-2">Open</a>`
-
                         roomCard += `
-                                <h5 class="fw-bold">${room.room_name}</h5>
-                                <p class="text-muted">Owner: <span class="fw-bold">${room.username}</span></p>
-                                <p class="text-muted">Code: <span class="fw-bold">${room.room_code}</span></p>
-
-                                <p class="text-muted">
-                                    <span class="fw-bold">Description:</span><br>
+                                <h5 class="fw-bold text-primary mb-2">${room.room_name}</h5>
+                                <p class="text-muted mb-1">
+                                    <strong>Owner:</strong> 
+                                    <span class="fw-bold text-success">${room.username}</span>
+                                </p>
+                                <p class="text-muted mb-1">
+                                    <strong>Code:</strong> 
+                                    <span class="fw-bold">${room.room_code}</span>
+                                </p>
+                                <p class="text-muted mb-3">
+                                    <strong>Description:</strong><br>
                                     <span style="text-align: justify;">${room.description}</span>
                                 </p>
+                                <p class="text-muted mb-1">
+                                    <strong>Created At:</strong> 
+                                    <span class="fw-bold">${create_date}</span>
+                                </p>
+                                <p class="text-muted mb-0">
+                                    <strong>Type:</strong> 
+                                    <span class="fw-bold" style="color: ${room.is_private ? 'red' : 'green'};">
+                                        ${room.is_private ? 'Private Room 🔒' : 'Public Room 🌐'}
+                                    </span>
+                                </p>
 
-                                <p class="text-muted">Created at: <span><b>${create_date}</b></span></p>
                                 ${button_join}
                                 ${ROOM_IS_JOINED ? buttonExitJoinedRoom : ''}
 
@@ -457,17 +545,66 @@
 
 
     // edit modal function and request to server
-    async function openEditModal(id, code, name, description) {
+    async function openEditModal(id, code, name, description, status_now) {
         const editModal = new bootstrap.Modal($('#editRoomModal'))
+        $('#isPrivateEdit').val(status_now ? 'true' : 'false')
+        if (status_now) $('#passwordFields').removeClass('d-none')
+        else $('#passwordFields').addClass('d-none')
+
         $('#roomCodeEdit').val(code)
         $('#roomNameEdit').val(name)
         $('#roomDescriptionEdit').val(description)
+        let is_private = $('#isPrivateEdit').val() === 'true' ? true : false
         editModal.show()
 
+        $('#isPrivateEdit').on('change', function() {
+            const isPrivate = $('#isPrivateEdit').val()
+            if (isPrivate === 'true') {
+                $('#passwordFields').removeClass('d-none')
+                is_private = true
+
+            } else {
+                $('#passwordFields').addClass('d-none')
+                is_private = false
+            }
+        })
+
         // edit room modal 
-        $('#editRoomForm').submit(async function() {
+        $('#editRoomBtn').off('click').click(async function() {
             event.preventDefault()
+
+            const new_name = $('#roomNameEdit').val()
+            const new_description = $('#roomDescriptionEdit').val()
+            const pass_input = $('#editPasswordRoom').val()
+            const pass_input_confirm = $('#editConfirmPasswordRoom').val()
+            let new_password = ''
+
+            if(is_private) {
+                new_password = pass_input
+                // if old status is public and change to private, so check the password
+                // or if the room is private and user want to change the password
+                if ((!status_now && is_private) || (is_private && pass_input !== '')) {
+
+                    if (pass_input.length < 4 || pass_input.length > 30) {
+                        showInfoModal('Password length must be between 4 and 30 characters and you must include password if change the room from public to private', 'Edit Room Failed')
+                        return
+                    }
+
+                    if (pass_input != pass_input_confirm) {
+                        showInfoModal('Password and confirm password not same', 'Edit Room Failed')
+                        return
+                    }
+                }
+            }
             
+            const dataReq = JSON.stringify({
+                id: id,
+                room_name: new_name,
+                description: new_description,
+                is_private: is_private,
+                old_status: status_now,
+                password: new_password
+            })
             editModal.hide()
             showLoader()
 
@@ -477,11 +614,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        id: id, 
-                        room_name: $('#roomNameEdit').val().trim(), 
-                        description: $('#roomDescriptionEdit').val().trim()
-                    })
+                    body: dataReq
                 })
                 const response = await resp.json()
 
@@ -495,6 +628,9 @@
             } catch(e) {
                 showInfoModal(e.message, 'Edit Room Failed')
                 hideLoader()
+            } finally {
+                $('#editPasswordRoom').val('')
+                $('#editConfirmPasswordRoom').val('')
             }
         })
     }
@@ -505,7 +641,7 @@
         $('#roomCodeDeleteModal').text(code)
         deleteModal.show()
 
-        $('#confirmDeleteBtn').click(async function() {
+        $('#confirmDeleteBtn').one('click', async function() {
             event.preventDefault()
 
             deleteModal.hide()
@@ -575,24 +711,60 @@
         })
     }
 
-    async function joinRoomAPI(room_id) {
+    async function joinRoomAPI(room_id, password) {
         const response = await fetch("/api/rooms/members", {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                room_id: room_id
+                room_id: room_id,
+                password: password,
             })
         })
         const resp = await response.json()
+
+        //  return resp
+        return resp
     }
 
     // button function
-    async function openRoom(room_code, room_id, is_owner) {
+    async function openRoom(room_code, room_id, is_owner, is_private_room) {
+        // this function for joining room for private room when user try to join the room
+
         const id = parseInt(room_id)
-        if(Boolean(is_owner)) joinRoomAPI(id)
-        window.location.href = `/rooms/${room_code}`
+        let success_open = true
+        let message = ''
+        // if not owner, join the room (add the user to the room as new member)
+        if(!is_owner) {
+            let password = ''
+            // first check if the room is private or not and if it private so show the password modal
+            if (is_private_room) {
+                const enterPrivateRoomModal = new bootstrap.Modal($('#enterPassPrivateRoom'))
+                $('#roomCodePrivateJoin').text(room_code)
+                enterPrivateRoomModal.show()
+
+                $('#enterPassPrivateRoom').submit(async function() {
+                    event.preventDefault()
+
+                    showLoader()
+
+                    password = $('#inputPassPrivateRoom').val().trim()
+                    enterPrivateRoomModal.hide()
+
+                    let resp = await joinRoomAPI(id, password)
+                    
+                    hideLoader()
+                    $('#inputPassPrivateRoom').val('')
+
+                    success_open = resp.error ? false : true
+                    message = resp.message
+
+                    if (success_open) window.location.href = `/rooms/${room_code}`
+                    else showInfoModal(message, 'Failed to join room')
+                })
+            } else window.location.href = `/rooms/${room_code}`
+        } else window.location.href = `/rooms/${room_code}`
     }
 
 
@@ -701,10 +873,7 @@
 
                 if (!response.error) {
                     hideLoader()
-                    showInfoModal('Logout Success', 'Logout berhasil')
-                    setTimeout(() => {
-                        window.location.href = '/login'
-                    }, 1000)
+                    window.location.href = '/login'
                 } else {
                     hideLoader()
                     showInfoModal('Logout Failed', 'Failed to logout')
@@ -723,9 +892,32 @@
 
             const roomName = $('#roomName').val().trim()
             const roomDescription = $('#roomDescription').val().trim()
+            let password = ""
+            let room_private = false
+
+            // check password, and if it valid so the room is private
+            const passInput = $('#passwordRoomCreate').val().trim()
+            const passConfirm = $('#confirmPasswordRoomCreate').val().trim()
+            if (passInput.length > 0) {
+                if (passInput.length < 4 || passInput.length > 30) {
+                    showInfoModal("Password length must be between 4 and 30 characters", 'Create Room Failed')
+                    return
+                }
+
+                if(passInput !== passConfirm) {
+                    showInfoModal("Password and confirm password not same", 'Create Room Failed')
+                    return
+                }
+
+                password = passInput
+                room_private = true
+            }
+
             const dataReq = JSON.stringify({
                 room_name: roomName,
-                Description: roomDescription
+                description: roomDescription,
+                password: password,
+                is_private: room_private
             })
 
             showLoader()
@@ -744,6 +936,8 @@
                     modalAddRoom.hide()
                     $('#roomName').val('')
                     $('#roomDescription').val('')
+                    $('#passwordRoomCreate').val('')
+                    $('#confirmPasswordRoomCreate').val('')
 
                     PAGE = 1 // automatic set page to first page if using create room
                     $('#roomSearch').val('') // clear search input

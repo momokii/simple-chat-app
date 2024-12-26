@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"database/sql"
-	"log"
 	"math"
 
 	"github.com/go-playground/validator/v10"
@@ -12,6 +11,7 @@ import (
 	"github.com/momokii/simple-chat-app/internal/repository/room"
 	roommember "github.com/momokii/simple-chat-app/internal/repository/room_member"
 	"github.com/momokii/simple-chat-app/pkg/utils"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type RoomChatHandler struct {
@@ -158,7 +158,21 @@ func (h *RoomChatHandler) CreateRoom(c *fiber.Ctx) error {
 			case "Description":
 				return utils.ResponseError(c, fiber.StatusBadRequest, "Description must be alphanumeric and between 6-50 characters")
 			}
+
+			// if private, check password for private room
+			if room.IsPrivate {
+				switch err.Field() {
+				case "Password":
+					return utils.ResponseError(c, fiber.StatusBadRequest, "Password is required for private room and must be alphanumeric and between 4-30 characters")
+				}
+			}
+
 		}
+	}
+
+	// if is private and passowrd is empty
+	if room.IsPrivate && room.Password == "" {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Password is required for private room")
 	}
 
 	tx, err := database.DB.Begin()
@@ -193,6 +207,17 @@ func (h *RoomChatHandler) CreateRoom(c *fiber.Ctx) error {
 		Description: room.Description,
 	}
 
+	// if private, hash password
+	if room.IsPrivate {
+		passwordHashed, err := bcrypt.GenerateFromPassword([]byte(room.Password), 16)
+		if err != nil {
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to hash password")
+		}
+
+		roomData.Password = string(passwordHashed)
+		roomData.IsPrivate = true
+	}
+
 	if err := h.roomChatRepo.Create(tx, &roomData); err != nil {
 		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to create new room")
 	}
@@ -218,6 +243,16 @@ func (h *RoomChatHandler) EditRoom(c *fiber.Ctx) error {
 			case "Description":
 				return utils.ResponseError(c, fiber.StatusBadRequest, "Description must be alphanumeric and between 6-50 characters")
 			}
+
+			// check new password error if room is private and the private is change form before is public and change to private
+			// or if room is private and password is not empty
+			if (roomUpdateInput.IsPrivate && !roomUpdateInput.OldStatus) || (roomUpdateInput.IsPrivate && roomUpdateInput.Password != "") {
+				switch err.Field() {
+				case "Password":
+					return utils.ResponseError(c, fiber.StatusBadRequest, "Password is required for private room and must be alphanumeric and between 4-30 characters")
+				}
+			}
+
 		}
 	}
 
@@ -245,12 +280,31 @@ func (h *RoomChatHandler) EditRoom(c *fiber.Ctx) error {
 	}
 
 	// update rrom data
+	isUpdatePassword := false // false can happen like when room is public and change to public or private to private and password is empty
 	updateRoom := models.RoomChat{
 		Id:          roomUpdateInput.Id,
 		RoomName:    roomUpdateInput.RoomName,
 		Description: roomUpdateInput.Description,
+		IsPrivate:   roomUpdateInput.IsPrivate,
 	}
-	if err := h.roomChatRepo.Update(tx, &updateRoom); err != nil {
+	// if the room is private and new data change to public, remove password
+	if isRoomExist.IsPrivate && !roomUpdateInput.IsPrivate {
+		updateRoom.Password = ""
+		isUpdatePassword = true
+
+	} else if (isRoomExist.IsPrivate && roomUpdateInput.IsPrivate && roomUpdateInput.Password != "") || (!isRoomExist.IsPrivate && roomUpdateInput.IsPrivate && roomUpdateInput.Password != "") {
+		// if the room is private and password is not empty, hash the password
+
+		newHashedPass, err := bcrypt.GenerateFromPassword([]byte(roomUpdateInput.Password), 16)
+		if err != nil {
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to hash password")
+		}
+
+		updateRoom.Password = string(newHashedPass)
+		isUpdatePassword = true
+	}
+
+	if err := h.roomChatRepo.Update(tx, &updateRoom, isUpdatePassword); err != nil {
 		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to update room")
 	}
 
@@ -350,13 +404,24 @@ func (h *RoomChatHandler) AddJoinRoom(c *fiber.Ctx) error {
 
 	// if not exist so add user to the room
 	if !exist {
+
+		// check the room is private or not, if private check the password
+		if roomCheck.IsPrivate {
+			if memberInput.Password == "" {
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Password is required for private room")
+			}
+
+			if err := bcrypt.CompareHashAndPassword([]byte(roomCheck.Password), []byte(memberInput.Password)); err != nil {
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Invalid password")
+			}
+		}
+
 		newMember := models.RoomMember{
 			RoomId: memberInput.RoomId,
 			UserId: user.Id,
 		}
 
 		if err := h.roomMemberRepo.Create(tx, &newMember); err != nil {
-			log.Println(err)
 			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to join room")
 		}
 	}
