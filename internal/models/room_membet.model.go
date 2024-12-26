@@ -14,4 +14,6 @@ type RoomMemberShow struct {
 
 type RoomMemberCreate struct {
 	RoomId int `json:"room_id" validate:"required"`
+	// just case need password field because we need password for the private room chat
+	Password string `json:"password" validate:"min=4,max=30"`
 }

@@ -12,6 +12,8 @@ CREATE TABLE room_chat (
     created_by INT NOT NULL REFERENCES users(id),
     name VARCHAR(25) NOT NULL,
     description VARCHAR(255) NOT NULL,
+    password VARCHAR(255) DEFAULT '',
+    is_private BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -24,10 +26,6 @@ CREATE TABLE messages (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- index for table users
-CREATE INDEX idx_messages_room_id ON messages(room_id);
-CREATE INDEX idx_messages_created_at ON messages(created_at);
-
 CREATE TABLE room_members (
     id SERIAL PRIMARY KEY,
     room_id INT NOT NULL REFERENCES room_chat(id) ON DELETE CASCADE,
@@ -35,3 +33,7 @@ CREATE TABLE room_members (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (room_id, user_id)
 );
+
+-- index for table users
+CREATE INDEX idx_messages_room_id ON messages(room_id);
+CREATE INDEX idx_messages_created_at ON messages(created_at);
