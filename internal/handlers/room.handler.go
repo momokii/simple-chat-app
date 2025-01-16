@@ -405,7 +405,7 @@ func (h *RoomChatHandler) AddJoinRoom(c *fiber.Ctx) error {
 	// if not exist so add user to the room
 	if !exist {
 
-		// check the room is private or not, if private check the password
+		// check the room is private or not, if private check the password and if not private, just add user to the room
 		if roomCheck.IsPrivate {
 			if memberInput.Password == "" {
 				return utils.ResponseError(c, fiber.StatusBadRequest, "Password is required for private room")

@@ -763,7 +763,21 @@
                     if (success_open) window.location.href = `/rooms/${room_code}`
                     else showInfoModal(message, 'Failed to join room')
                 })
-            } else window.location.href = `/rooms/${room_code}`
+            } else {
+                event.preventDefault()
+
+                showLoader()
+
+                let resp = await joinRoomAPI(id, '')
+                
+                hideLoader()
+
+                success_open = resp.error ? false : true
+                message = resp.message
+
+                if (success_open) window.location.href = `/rooms/${room_code}`
+                else showInfoModal(message, 'Failed to join room')
+            }
         } else window.location.href = `/rooms/${room_code}`
     }
 
