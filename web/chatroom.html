@@ -292,6 +292,8 @@
                                 sent: message.created_at
                             }
                             const messageData = Object.assign(new NewMessageEvent, data)
+
+                            // for every message received, append it to the chat area ith chat append event function
                             appendChatMessage(messageData)
                         })
                     }
@@ -313,8 +315,6 @@
                 content: newMessage
             })
 
-            showLoader()
-
             try {
                 const resp = await fetch(BASE_URL, {
                     method: 'POST',
@@ -330,8 +330,6 @@
 
             } catch (e) {
                 showInfoModal('Failed to send message: ' + e.message, 'Error')
-            } finally {
-                hideLoader()
             }
         }
 

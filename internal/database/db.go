@@ -22,6 +22,11 @@ func InitDB() {
 
 	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s", host, port, user, password, dbname)
 
+	// check if using localhost (ofc that mean using development mode) so disabled the sslmode
+	if host == "localhost" {
+		connStr += " sslmode=disable"
+	}
+
 	DB, err = sql.Open("postgres", connStr)
 	if err != nil {
 		panic(err)
