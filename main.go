@@ -9,12 +9,14 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 	"github.com/gofiber/template/html/v2"
+	"github.com/momokii/go-llmbridge/pkg/openai"
 	"github.com/momokii/simple-chat-app/internal/database"
 	"github.com/momokii/simple-chat-app/internal/handlers"
 	"github.com/momokii/simple-chat-app/internal/middlewares"
 	"github.com/momokii/simple-chat-app/internal/repository/message"
 	"github.com/momokii/simple-chat-app/internal/repository/room"
 	roommember "github.com/momokii/simple-chat-app/internal/repository/room_member"
+	"github.com/momokii/simple-chat-app/internal/repository/room_train"
 	"github.com/momokii/simple-chat-app/internal/repository/user"
 	"github.com/momokii/simple-chat-app/internal/ws"
 
@@ -22,6 +24,19 @@ import (
 )
 
 func main() {
+	// llm client init
+	gptClient, err := openai.New(
+		os.Getenv("OA_APIKEY"),
+		os.Getenv("OA_ORGANIZATIONID"),
+		os.Getenv("OA_PROJECTID"),
+		openai.WithModel("gpt-4o-mini"),
+	)
+	if err != nil {
+		log.Println("Error when init openai client: ", err)
+	} else {
+		log.Println("OpenAI client is ready")
+	}
+
 	// db and session storage init
 	database.InitDB()
 	middlewares.InitSession()
@@ -29,14 +44,15 @@ func main() {
 	// repo init
 	userRepo := user.NewUserRepo()
 	roomRepo := room.NewRoomChatRepo()
+	roomTrainRepo := room_train.NewRoomChatTrainRepo()
 	messageRepo := message.NewMessageRepo()
 	roomemberRepo := roommember.NewRoomMember()
 
 	// handler init
 	authHandler := handlers.NewAuthHandler(*userRepo)
-	roomHandler := handlers.NewRoomChatHandler(*roomRepo, *roomemberRepo)
+	roomHandler := handlers.NewRoomChatHandler(*roomRepo, *roomTrainRepo, *roomemberRepo, gptClient)
 	userHandler := handlers.NewUserHandler(*userRepo)
-	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo)
+	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo, gptClient, *roomTrainRepo)
 
 	// init websocket manager
 	manager := ws.NewManager()
@@ -75,9 +91,12 @@ func main() {
 	api.Post("/logout", middlewares.IsAuth, authHandler.Logout)
 
 	// room page
+	app.Get("/rooms/:room_code/train", middlewares.IsAuth, roomHandler.RoomTrainChatView)
+	api.Get("/rooms/:room_code/train/detail", middlewares.IsAuth, roomHandler.GetTrainRoomData)
 	app.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.RoomChatView)
 	api.Get("/rooms/:room_code", middlewares.IsAuth, roomHandler.GetRoomData)
 	api.Get("/rooms", middlewares.IsAuth, roomHandler.GetRoomList)
+	api.Post("/rooms/train", middlewares.IsAuth, roomHandler.CreateTrainRoom)
 	api.Post("/rooms", middlewares.IsAuth, roomHandler.CreateRoom)
 	api.Patch("/rooms", middlewares.IsAuth, roomHandler.EditRoom)
 	api.Delete("/rooms", middlewares.IsAuth, roomHandler.DeleteRoom)
@@ -87,6 +106,8 @@ func main() {
 
 	app.Get("/ws/:room_code", adaptor.HTTPHandlerFunc(manager.ServeWS)) // websocket connection
 	api.Get("/messages/:room_code", middlewares.IsAuth, messageHandler.GetMessageByRoom)
+	api.Post("/messages/train/save", middlewares.IsAuth, messageHandler.SaveMessageLLM)
+	api.Post("/messages/train", middlewares.IsAuth, messageHandler.SendMessageTrain)
 	api.Post("/messages", middlewares.IsAuth, messageHandler.SaveNewMessage)
 
 	api.Patch("/users", middlewares.IsAuth, userHandler.ChangeUsername)

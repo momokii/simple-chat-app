@@ -13,18 +13,19 @@ func NewRoomChatRepo() *RoomChatRepo {
 	return &RoomChatRepo{}
 }
 
-func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_room, is_room_joined, filter, search string) (*[]models.RoomChatDataShow, int, error) {
+func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_room, is_room_joined, is_room_train, filter, search string) (*[]models.RoomChatDataShow, int, error) {
 	var rooms []models.RoomChatDataShow
 	var filterType string
 	offset := (page - 1) * per_page
 	total := 0
 
 	total_query := "SELECT COUNT(rc.id) FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1 = 1"
-	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at, rc.is_private FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1 = 1"
+	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at, rc.is_private, rc.is_train_room FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1 = 1"
 
 	idxParam := 1
 	paramData := []interface{}{}
-	if is_user_room == "true" {
+	if is_user_room == "true" || is_room_train == "true" {
+		// for "my room" and "train room" we just show/retrieve the room that created by the user
 		if user_id < 1 {
 			return &rooms, 0, fmt.Errorf("User ID is required")
 		}
@@ -60,6 +61,17 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 		idxParam += 3
 	}
 
+	// setup for train rizz exception
+	if is_room_train == "true" {
+		query += " AND rc.is_train_room = TRUE" //+ fmt.Sprint(idxParam)
+		// paramData = append(paramData, "false")
+		// idxParam++
+	} else {
+		query += " AND rc.is_train_room = FALSE" //+ fmt.Sprint(idxParam)
+		// paramData = append(paramData, "true")
+		// idxParam++
+	}
+
 	if filter != "" && filter == "oldest" {
 		filterType = "ASC"
 	} else {
@@ -86,7 +98,7 @@ func (r *RoomChatRepo) Find(tx *sql.Tx, user_id, page, per_page int, is_user_roo
 	for rows.Next() {
 		var room models.RoomChatDataShow
 
-		if err := rows.Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt, &room.IsPrivate); err != nil {
+		if err := rows.Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt, &room.IsPrivate, &room.IsTrainRoom); err != nil {
 			return &rooms, total, err
 		}
 
@@ -103,7 +115,7 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 		return &room, fmt.Errorf("Code or/and ID is required")
 	}
 
-	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at, rc.is_private, rc.password FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1=1"
+	query := "SELECT rc.id, rc.code, rc.created_by, u.username, rc.name, rc.description, rc.created_at, rc.is_private, rc.is_train_room, rc.password FROM room_chat rc LEFT JOIN users u ON rc.created_by = u.id WHERE 1=1"
 
 	idx := 1
 	paramData := []interface{}{}
@@ -119,7 +131,7 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 		paramData = append(paramData, id)
 	}
 
-	if err := tx.QueryRow(query, paramData...).Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt, &room.IsPrivate, &room.Password); err != nil && err != sql.ErrNoRows {
+	if err := tx.QueryRow(query, paramData...).Scan(&room.Id, &room.RoomCode, &room.CreatedBy, &room.Username, &room.RoomName, &room.Description, &room.CreatedAt, &room.IsPrivate, &room.IsTrainRoom, &room.Password); err != nil && err != sql.ErrNoRows {
 		return &room, err
 	}
 
@@ -127,9 +139,9 @@ func (r *RoomChatRepo) FindByCodeOrAndId(tx *sql.Tx, code string, id int) (*mode
 }
 
 func (r *RoomChatRepo) Create(tx *sql.Tx, room *models.RoomChat) error {
-	query := "INSERT INTO room_chat (code, created_by, name, description, password, is_private) VALUES ($1, $2, $3, $4, $5, $6)"
+	query := "INSERT INTO room_chat (code, created_by, name, description, password, is_private, is_train_room) VALUES ($1, $2, $3, $4, $5, $6, $7)"
 
-	if _, err := tx.Exec(query, room.RoomCode, room.CreatedBy, room.RoomName, room.Description, room.Password, room.IsPrivate); err != nil {
+	if _, err := tx.Exec(query, room.RoomCode, room.CreatedBy, room.RoomName, room.Description, room.Password, room.IsPrivate, room.IsTrainRoom); err != nil {
 		return err
 	}
 

@@ -20,7 +20,7 @@ func (r *MessageRepo) FindByRoom(tx *sql.Tx, roomId int) (*[]models.MessageShow,
 		return &messages, errors.New("Room ID is required")
 	}
 
-	query := "SELECT m.id, m.room_id, u.username, m.content, m.created_at FROM messages m LEFT JOIN users u ON m.sender_id = u.id WHERE room_id = $1 ORDER BY created_at ASC"
+	query := "SELECT m.id, m.room_id, u.username, m.content, m.created_at FROM messages m LEFT JOIN users u ON m.sender_id = u.id WHERE room_id = $1 ORDER BY id ASC"
 
 	rows, err := tx.Query(query, roomId)
 	if err != nil {

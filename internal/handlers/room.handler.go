@@ -2,27 +2,35 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
+	"fmt"
 	"math"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"github.com/momokii/go-llmbridge/pkg/openai"
 	"github.com/momokii/simple-chat-app/internal/database"
 	"github.com/momokii/simple-chat-app/internal/models"
 	"github.com/momokii/simple-chat-app/internal/repository/room"
 	roommember "github.com/momokii/simple-chat-app/internal/repository/room_member"
+	"github.com/momokii/simple-chat-app/internal/repository/room_train"
 	"github.com/momokii/simple-chat-app/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type RoomChatHandler struct {
-	roomChatRepo   room.RoomChatRepo
-	roomMemberRepo roommember.RoomMemberRepo
+	roomChatRepo      room.RoomChatRepo
+	roomChatTrainRepo room_train.RoomChatTrainRepo
+	roomMemberRepo    roommember.RoomMemberRepo
+	openaiClient      openai.OpenAI
 }
 
-func NewRoomChatHandler(roomChatRepo room.RoomChatRepo, roomMemberRepo roommember.RoomMemberRepo) *RoomChatHandler {
+func NewRoomChatHandler(roomChatRepo room.RoomChatRepo, roomTrainRepo room_train.RoomChatTrainRepo, roomMemberRepo roommember.RoomMemberRepo, openaiClient openai.OpenAI) *RoomChatHandler {
 	return &RoomChatHandler{
-		roomChatRepo:   roomChatRepo,
-		roomMemberRepo: roomMemberRepo,
+		roomChatRepo:      roomChatRepo,
+		roomChatTrainRepo: roomTrainRepo,
+		roomMemberRepo:    roomMemberRepo,
+		openaiClient:      openaiClient,
 	}
 }
 
@@ -41,6 +49,63 @@ func (h *RoomChatHandler) RoomChatView(c *fiber.Ctx) error {
 	return c.Render("chatroom", fiber.Map{
 		"Title": "Chatroom - Chat Nge-Chat",
 		"User":  user,
+	})
+}
+
+func (h *RoomChatHandler) RoomTrainChatView(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	return c.Render("chatroom_train", fiber.Map{
+		"Title": "Chatroom - Chat Nge-Chat",
+		"User":  user,
+	})
+}
+
+func (h *RoomChatHandler) GetTrainRoomData(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	roomCode := c.Params("room_code")
+	if roomCode == "" {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Room Code is required")
+	}
+
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to start transaction")
+	}
+	defer func() {
+		database.CommitOrRollback(tx, c, err)
+	}()
+
+	// check room
+	checkRoom, err := h.roomChatRepo.FindByCodeOrAndId(tx, roomCode, 0)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to check room")
+	}
+
+	if checkRoom.Id == 0 {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Room is not exist")
+	}
+
+	// check if the room is train room, if not r
+	if !checkRoom.IsTrainRoom {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "This is not train room")
+	}
+
+	// check if room is created by user or not, if not return error because only creator can access this page (train page)
+	if checkRoom.CreatedBy != user.Id {
+		return utils.ResponseError(c, fiber.StatusUnauthorized, "You are not allowed to access this page")
+	}
+
+	// get train room detail data
+	trainRoomDetail, err := h.roomChatTrainRepo.FindByRoomCode(tx, roomCode)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get train room data")
+	}
+
+	return utils.ResponseWithData(c, fiber.StatusOK, "Success Get Train Room Data", fiber.Map{
+		"room":        checkRoom,
+		"room_detail": trainRoomDetail,
 	})
 }
 
@@ -66,6 +131,11 @@ func (h *RoomChatHandler) GetRoomData(c *fiber.Ctx) error {
 
 	if roomData.Id == 0 {
 		return utils.ResponseError(c, fiber.StatusBadRequest, "Room is not exist")
+	}
+
+	// if the room is train room, so return error because train room will be on different page
+	if roomData.IsTrainRoom {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "This is train room, please go to train room page")
 	}
 
 	// get list member data of the room
@@ -98,6 +168,10 @@ func (h *RoomChatHandler) GetRoomList(c *fiber.Ctx) error {
 	if is_room_joined != "true" {
 		is_room_joined = "false"
 	}
+	is_train_room := c.Query("train_rizz")
+	if is_train_room != "true" {
+		is_train_room = "false"
+	}
 	filter := c.Query("filter")
 	search := c.Query("search")
 	page := c.QueryInt("page")
@@ -117,7 +191,7 @@ func (h *RoomChatHandler) GetRoomList(c *fiber.Ctx) error {
 		database.CommitOrRollback(tx, c, err)
 	}()
 
-	rooms, total, err := h.roomChatRepo.Find(tx, user.Id, page, per_page, is_user_room, is_room_joined, filter, search)
+	rooms, total, err := h.roomChatRepo.Find(tx, user.Id, page, per_page, is_user_room, is_room_joined, is_train_room, filter, search)
 	if err != nil {
 		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get room list")
 	}
@@ -138,6 +212,155 @@ func (h *RoomChatHandler) GetRoomList(c *fiber.Ctx) error {
 			"total_page":   total_page,
 		},
 	})
+}
+
+func (h *RoomChatHandler) CreateTrainRoom(c *fiber.Ctx) error {
+	user := c.Locals("user").(models.UserSession)
+
+	roomTrain := new(models.RoomChatTrainCreate)
+
+	if err := c.BodyParser(roomTrain); err != nil {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "Invalid request")
+	}
+
+	if err := utils.ValidateStruct(roomTrain); err != nil {
+		for _, err := range err.(validator.ValidationErrors) {
+			switch err.Field() {
+			case "Gender":
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Gender is required")
+			case "Language":
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Language is required")
+			case "RangeAge":
+				return utils.ResponseError(c, fiber.StatusBadRequest, "Range Age is required")
+			}
+		}
+	}
+
+	// start tx
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to start transaction")
+	}
+	defer func() {
+		database.CommitOrRollback(tx, c, err)
+	}()
+
+	// init message to openai to get description for train room mate using llm
+	baseMessageReq := fmt.Sprintf(`"Buat profil *fictional* untuk simulasi dating app (Tinder/Bumble vibe) dengan kriteria yang akan dijelaskan di bawah. 
+	Pastikan bahasanya SUPER CASUAL, pakai slang gen Z, emoji, dan deskripsi unik ala bio Instagram/Tinder/Bumble pada umumnya.
+	
+	Hindari kalimat sangat formal—bayangkan seperti sedang bikin profil buat temen yang sok asik!". 
+	
+	Data dasar yang dimiliki dan diprovide adalah berikut: 
+		Gender: %s 
+		Range Age: %s 
+		Main Language: %s
+
+	Berdasarkan data di atas, Tambahkan detail dengan poin yang ada di bawah ini dengan disesuaikan dengan data yang diberikan di atas (gender, language, dan range age):
+		1. Employment Type, bisa berikan penjelasan bagian ini secara sederhana atau unik juga bisa
+
+		2. Description: 
+		- Fokus pada kebiasaan unik & relatable, contoh sebagai referensi (selalu coba untuk membuatnya beda dari contoh diberikan jika memungkinkan): 
+			- "Cewek yang bisa nangis nonton Drakor, tapi juga bisa gebukin tikus pake sandal jepit 😤" 
+			- "Cowok pecinta kopi hitam & motor tua. Auto ghosting kalo lo bilang 'es kopi susu lebih enak' ☕"
+		- Bisa hanya sekadar sederhana, contoh:
+			- "Cewek yang suka jalan-jalan"
+			- "Cowok yang suka main game"
+
+		3. Hobby: 
+		- Pakai format visual + emoji, contoh sebagai referensi (selalu coba untuk membuatnya beda dari contoh diberikan jika memungkinkan): 
+			- "Nyari spot aestetik buat feed IG 📸 | Bikin playlist Spotify buat setiap mood (galau, semangat, atau pengen jadi ikan 🐠)" 
+			- "Nge-gym... eh, maksudnya foto di gym terus post story 🏋️♂️"
+		- Bisa hanya sekadar sederhana, contoh:
+			- "Main game"
+			- "Nonton film"
+
+		4. Personality: 
+		- Gabungkan sifat + kebiasaan random, contoh sebagai referensi (selalu coba untuk membuatnya beda dari contoh diberikan jika memungkinkan): 
+			- "Kocak ga jelas tapi bisa deep talk ✨ | Suka marahin diri sendiri kalo lupa nyimpen kunci 🔑" 
+			- "Humor sarkas level 100 🗡️ | Auto jadi ibu-ibu kalo liat orang parkir sembarangan 🚗💢"
+		- Bisa hanya sekadar sederhana, contoh:
+			- "Pluviofile"
+			- "Introvert"
+	`, roomTrain.Gender, roomTrain.RangeAge, roomTrain.Language)
+	baseResponseFormat := openai.OACreateResponseFormat(
+		"base_format_response",
+		map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"employment_type": map[string]interface{}{"type": "string"},
+				"description":     map[string]interface{}{"type": "string"},
+				"hobby":           map[string]interface{}{"type": "string"},
+				"personality":     map[string]interface{}{"type": "string"},
+			},
+		},
+	)
+
+	initMessage := []openai.OAMessageReq{
+		{
+			Role:    "user",
+			Content: baseMessageReq,
+		},
+	}
+
+	initResponse, err := h.openaiClient.OpenAIGetFirstContentDataResp(&initMessage, true, &baseResponseFormat, false, nil)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get initial message response")
+	}
+
+	initResData := new(models.RoomChatTrainCreationRes)
+	if err := json.Unmarshal([]byte(initResponse.Content), initResData); err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to marshal response")
+	}
+
+	// first add new room data (basic room data)
+
+	// create code room
+	var codeRoom string
+	for {
+		codeRoom = utils.RandomString(6)
+
+		isRoomExist, err := h.roomChatRepo.FindByCodeOrAndId(tx, codeRoom, 0)
+		if err != nil {
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to check room code")
+		}
+
+		if isRoomExist.Id == 0 {
+			break
+		}
+	}
+
+	newRoom := models.RoomChat{
+		CreatedBy:   user.Id,
+		RoomName:    "Train Room",
+		Description: "-",
+		IsTrainRoom: true,
+		IsPrivate:   false,
+		RoomCode:    codeRoom,
+	}
+
+	if err := h.roomChatRepo.Create(tx, &newRoom); err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to create new room")
+	}
+
+	// add new train room data
+	newRoomTrain := models.RoomChatTrain{
+		RoomCode:       codeRoom,
+		Gender:         roomTrain.Gender,
+		Language:       roomTrain.Language,
+		RangeAge:       roomTrain.RangeAge,
+		EmploymentType: initResData.EmploymentType,
+		Description:    initResData.Description,
+		Hobby:          initResData.Hobby,
+		Personality:    initResData.Personality,
+	}
+
+	if err := h.roomChatTrainRepo.Create(tx, &newRoomTrain); err != nil {
+		fmt.Println(err)
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to create new train room")
+	}
+
+	return utils.ResponseMessage(c, fiber.StatusOK, "Success Create Train Room")
 }
 
 func (h *RoomChatHandler) CreateRoom(c *fiber.Ctx) error {
@@ -205,6 +428,7 @@ func (h *RoomChatHandler) CreateRoom(c *fiber.Ctx) error {
 		CreatedBy:   user.Id,
 		RoomName:    room.RoomName,
 		Description: room.Description,
+		IsTrainRoom: false,
 	}
 
 	// if private, hash password

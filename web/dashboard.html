@@ -23,8 +23,12 @@
                     <button id="logoutBtn" class="btn btn-outline-danger btn-sm">Logout</button>
                 </div>
             </div>
-        
-            <button class="btn btn-outline-success" id="createRoomBtn" data-bs-toggle="modal" data-bs-target="#createRoomModal">+ Create Room</button>
+            
+            <div class="d-flex align-items-center">
+                <button class="btn btn-outline-success me-2" id="createRoomBtn" data-bs-toggle="modal" data-bs-target="#createRoomModal">+ Create Room</button>
+                <button class="btn btn-outline-warning" id="createTrainRoomBtn" data-bs-toggle="modal" data-bs-target="#createTrainRoomModal">+ Dating App Training Room</button>
+            </div>
+            
         </div>
         
     
@@ -37,6 +41,7 @@
                         <button class="btn btn-outline-primary active" id="publicRoomsBtn">Public Room</button>
                         <button class="btn btn-outline-secondary" id="myRoomsBtn">My Room</button>
                         <button class="btn btn-outline-dark" id="joinedRoomsBtn">Joined Room</button>
+                        <button class="btn btn-outline-success" id="trainingRoomsBtn">My Training Room</button>
                     </div>
                 </div>
         
@@ -132,6 +137,63 @@
     </div>
 
 
+    <div class="modal fade" id="createTrainRoomModal" tabindex="-1" aria-labelledby="createTrainRoomModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createTrainRoomModalLabel">Create New Dating App Training Room</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="createTrainRoomForm">
+                        <div class="alert alert-info" role="alert">
+                            Choose 'Random' to auto-generate the room details. Only specify the gender in this case.
+                        </div>
+                        
+                        <!-- Random/Not Selection -->
+                        <div class="mb-3">
+                            <label for="randomOrNot" class="form-label">Room Details</label>
+                            <select class="form-select" id="randomOrNotCreateTrainRoom" required>
+                                <option value="not-random">Custom</option>
+                                <option value="random">Random</option>
+                            </select>
+                        </div>
+    
+                        <!-- Gender Field (Always Visible) -->
+                        <div class="mb-3">
+                            <label for="genderChoice" class="form-label">Gender</label>
+                            <select class="form-select" id="genderChoice" required>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                            </select>
+                        </div>
+    
+                        <!-- Fields to Hide When Random is Selected -->
+                        <div id="customFields">
+                            <div class="mb-3">
+                                <label for="mainLanguageChoice" class="form-label">Main Language</label>
+                                <select class="form-select" id="mainLanguageChoice" required>
+                                    <option value="indonesia">Indonesia</option>
+                                    <option value="english">English</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label for="ageRangeChoice" class="form-label">Age Range</label>
+                                <select class="form-select" id="ageRangeChoice" required>
+                                    <option value="18-24">18-24</option>
+                                    <option value="25-30">25-30</option>
+                                    <option value="31-40">31-40</option>
+                                </select>
+                            </div>
+                        </div>
+    
+                        <button type="submit" class="btn btn-success">Create Room</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+    
 
     <!-- Modal for Edit Username -->
     <div class="modal fade" id="editUsernameModal" tabindex="-1" aria-labelledby="editUsernameModalLabel" aria-hidden="true">
@@ -347,6 +409,7 @@
     let ROOM_BASE_URL = '/api/rooms'
     let ROOM_IS_SELF = false
     let ROOM_IS_JOINED = false
+    let ROOM_IS_TRAIN_RIZZ = false
     let SEARCH_TIMEOUT = null
     let SEARCH_ROOM = ''
     let FILTER_ROOM = 'newest'
@@ -358,7 +421,7 @@
     async function changePage(page, per_page){
         PAGE = page
         PER_PAGE = per_page
-        loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+        loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
     }
 
     function updatePagination(pagination) {
@@ -428,9 +491,10 @@
 
     }
 
-    async function loadChat(self = false, joined = false) {
+    async function loadChat(self = false, joined = false, train_rizz = false) {
         if (self) ROOM_BASE_URL = "/api/rooms/?self=true&joined=false"
         else if (joined) ROOM_BASE_URL = "/api/rooms/?self=false&joined=true"
+        else if (train_rizz) ROOM_BASE_URL = "/api/rooms/?self=false&joined=false&train_rizz=true"
         else ROOM_BASE_URL = "/api/rooms/?self=false&joined=false"
 
         ROOM_BASE_URL += `&search=${SEARCH_ROOM}&filter=${FILTER_ROOM}&page=${PAGE}&per_page=${PER_PAGE}`
@@ -458,7 +522,6 @@
                     roomList.append('<p class="text-muted">No room available</p>')
                 } else {
                     roomData.forEach(room => {
-
                         let is_owner = false
 
                         // if user is owner or user is on joined room tab set is_owner to true and this make button for the room is "open" button notn "join" button
@@ -474,26 +537,28 @@
                                 <button class="btn btn-danger btn-sm mt-2" onclick="openExitJoinedRoomModal(${room.id}, '${room.room_code}')">Exit</button>
                         `
 
-                        // ------- EDIT DELETE BUTTON ROOM
+                        // ------- EDIT & DELETE BUTTON ROOM
                         // button join or open room for the condition if user is owner/ already joined the room or not
                         let button_join = `<button onClick="openRoom('${room.room_code}', '${room.id}', ${is_owner}, ${room.is_private})" class="btn btn-success btn-sm mt-2">Join</button>`
                         
-                        if (is_owner) button_join = `<a href="/rooms/${room.room_code}" class="btn btn-primary btn-sm mt-2">Open</a>`
+                        if (is_owner && !room.is_train_room) button_join = `<a href="/rooms/${room.room_code}" class="btn btn-primary btn-sm mt-2">Open</a>`
+                        else if (room.is_train_room) button_join = `<a href="/rooms/${room.room_code}/train" class="btn btn-primary btn-sm mt-2">Open</a>`
 
                         // add delete and edit button if user is owner for the "my room" tab
                         let buttonRoom = `
                             <div class="room-actions">
-                                <button class="btn btn-sm btn-warning" onclick="openEditModal(${room.id}, '${room.room_code}', '${room.room_name}', '${room.description}', ${room.is_private})">Edit</button>
                                 <button class="btn btn-sm btn-danger" onclick="openDeleteModal(${room.id}, '${room.room_code}')">Delete</button>
-                            </div>
+                                
                         `
+                        if (self) buttonRoom += `<button class="btn btn-sm btn-warning" onclick="openEditModal(${room.id}, '${room.room_code}', '${room.room_name}', '${room.description}', ${room.is_private})">Edit</button>`
+                        buttonRoom += '</div>'
 
                         let roomCard = `
                             <div class="room-card text-justify" id="room-${room.room_code}">
-                        `
+                        ` 
 
                         // add button for delete and edit room if user is owner (basically just using it on "my room" tab)
-                        if (self) roomCard += buttonRoom
+                        if (self || train_rizz) roomCard += buttonRoom
 
                         roomCard += `
                                 <h5 class="fw-bold text-primary mb-2">${room.room_name}</h5>
@@ -621,7 +686,7 @@
                 if(response.error) throw new Error('Failed to edit room with code ' + code + ': ' + response.message)
                 else {
                     hideLoader()
-                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
                     showInfoModal(`Success edit room with id: <b>${code}</b>`, 'Edit Room Success')
                 }
 
@@ -661,7 +726,7 @@
                 else {
                     hideLoader()
 
-                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
 
                     showInfoModal(`Success delete room with id ${code}`, 'Delete Room Success')
                 }
@@ -699,7 +764,7 @@
                 else {
                     hideLoader()
 
-                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
 
                     showInfoModal(`Success exit room with id ${code}`, 'Exit Room Success')
                 }
@@ -784,7 +849,17 @@
 
     $("document").ready(async function() {
         // load room chat
-        loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+        loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
+
+        // CREATE TRAIN ROOM
+        $('#randomOrNotCreateTrainRoom').on('change', function() {
+            const randomOrNot = $('#randomOrNotCreateTrainRoom').val()
+            if (randomOrNot === 'random') {
+                $('#customFields').addClass('d-none')
+            } else {
+                $('#customFields')  .removeClass('d-none')
+            }
+        })
 
         // --------------------------------------------- EDIT USERNAME AND PASSWORD
         // edit username
@@ -901,6 +976,65 @@
         });
 
         // Create Room
+
+        // RIZZ TRAINING ROOM 
+        $('#createTrainRoomForm').submit(async function () {
+            event.preventDefault()
+
+            const gender_choice = $('#genderChoice').val()
+            const is_random = $('#randomOrNotCreateTrainRoom').val() === 'random' ? true : false
+            let lang = $('#mainLanguageChoice').val()
+            let range_age = $('#ageRangeChoice').val()
+
+            // if user not using random, so check the value of lang and range age
+            if (is_random) {
+                const lang_choice = ['indonesia', 'english']
+                const range_age_choice = ['18-24', '25-30', '31-40']
+
+                lang = lang_choice[Math.floor(Math.random() * lang_choice.length)]
+                range_age = range_age_choice[Math.floor(Math.random() * range_age_choice.length)]
+            }
+
+            showLoader()
+
+            const reqBody = JSON.stringify({
+                gender: gender_choice,
+                language: lang,
+                range_age: range_age,
+            })
+
+            try {
+                const res = await fetch("/api/rooms/train", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: reqBody
+                })
+                const response = await res.json()
+                hideLoader()
+
+                if(!response.error) {
+                    PAGE = 1 // automatic set page to first page if using create room
+                    $('#roomSearch').val('') // clear search input
+                    SEARCH_ROOM = ''
+
+                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
+
+                    showInfoModal("Success Create Train Room", 'Create Train Room Success')
+
+                } else {
+                    hideLoader()
+                    showInfoModal('Failed to create training room: ' + response.message, 'Create Training Room Failed')
+                }
+
+            } catch(e) {
+                hideLoader()
+                showInfoModal('Failed to create training room: ' + e.message, 'Create Training Room Failed')
+            }
+        })
+
+        // NORMAL ROOM
         $('#createRoomForm').submit(async function() {
             event.preventDefault()
 
@@ -945,8 +1079,8 @@
                     body: dataReq
                 })
                 const response = await resp.json()
+                hideLoader()
                 if (!response.error) {
-                    hideLoader()
                     modalAddRoom.hide()
                     $('#roomName').val('')
                     $('#roomDescription').val('')
@@ -957,11 +1091,10 @@
                     $('#roomSearch').val('') // clear search input
                     SEARCH_ROOM = ''
 
-                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                    await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
 
                     showInfoModal("Success Create Room", 'Create Room Success')
                 } else {
-                    hideLoader()
                     showInfoModal("Failed Create Room, Error: " + response.message, 'Create Room Failed')
                 }
 
@@ -982,7 +1115,7 @@
             SEARCH_ROOM = $('#roomSearch').val().trim()
             FILTER_ROOM = $('#roomFilter').val()
 
-            loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+            loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
         })
 
         // filter show room per page
@@ -992,7 +1125,7 @@
             PER_PAGE = parseInt($('#roomShowFilter').val())
             PAGE = 1
 
-            loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+            loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
         })
 
         // search room
@@ -1004,22 +1137,24 @@
 
             SEARCH_TIMEOUT = setTimeout(async function() {
                 PAGE = 1 // automatic set page to first page if using search filter
-                loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
             }, 1500)
 
         })
 
-        // public, created, and joined room button
+        // public, created, joined, training room button
         $('#publicRoomsBtn').click(async function() {
             if ($('#publicRoomsBtn').hasClass('active')) return
             else {
                 ROOM_IS_SELF = false
                 ROOM_IS_JOINED = false
+                ROOM_IS_TRAIN_RIZZ = false
                 PAGE = 1
-                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
                 $('#joinedRoomsBtn').removeClass('active')
                 $('#myRoomsBtn').removeClass('active')
                 $('#publicRoomsBtn').addClass('active')
+                $('#trainingRoomsBtn').removeClass('active')
             }
         })
 
@@ -1028,11 +1163,13 @@
             else {
                 ROOM_IS_SELF = true
                 ROOM_IS_JOINED = false
+                ROOM_IS_TRAIN_RIZZ = false
                 PAGE = 1
-                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
                 $('#publicRoomsBtn').removeClass('active')
                 $('#joinedRoomsBtn').removeClass('active')
                 $('#myRoomsBtn').addClass('active')
+                $('#trainingRoomsBtn').removeClass('active')
             }
         })
 
@@ -1041,11 +1178,28 @@
             else {
                 ROOM_IS_SELF = false
                 ROOM_IS_JOINED = true
+                ROOM_IS_TRAIN_RIZZ = false
                 PAGE = 1
-                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED)
+                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
                 $('#publicRoomsBtn').removeClass('active')
                 $('#myRoomsBtn').removeClass('active')
                 $('#joinedRoomsBtn').addClass('active')
+                $('#trainingRoomsBtn').removeClass('active')
+            }
+        })
+
+        $('#trainingRoomsBtn').click(async function() {
+            if ($('#trainingRoomsBtn').hasClass('active')) return
+            else {
+                ROOM_IS_SELF = false
+                ROOM_IS_JOINED = false
+                ROOM_IS_TRAIN_RIZZ = true
+                PAGE = 1
+                await loadChat(ROOM_IS_SELF, ROOM_IS_JOINED, ROOM_IS_TRAIN_RIZZ)
+                $('#publicRoomsBtn').removeClass('active')
+                $('#myRoomsBtn').removeClass('active')
+                $('#joinedRoomsBtn').removeClass('active')
+                $('#trainingRoomsBtn').addClass('active')
             }
         })
 

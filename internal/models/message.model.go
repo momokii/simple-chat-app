@@ -21,3 +21,10 @@ type MessageCreate struct {
 	SenderId int    `json:"sender_id" validate:"required"`
 	Content  string `json:"content" validate:"required,min=1"`
 }
+
+type MessageLLMCreate struct {
+	RoomCode   string `json:"room_code" validate:"required"`
+	SenderId   int    `json:"sender_id" validate:"required"`
+	Content    string `json:"content" validate:"required,min=1"`
+	LLMContent string `json:"llm_content" validate:"required,min=1"`
+}

@@ -1,7 +1,7 @@
 {{ template "components/_header" . }}
 <body style="height: auto;">
     <div class="container py-5">
-        <h1 class="text-center mb-5">🟢 Chat menge-Chat, brol Meng-obrol</h1>
+        <h1 class="text-center mb-5">🟢 Train your skill to become a Tinder & Bumble Master</h1>
 
         <div class="card shadow-sm mx-auto" style="max-width: 600px;">
             <div class="card-body">
@@ -9,59 +9,56 @@
                 <div class="room-info mb-4 p-3 rounded shadow-sm border">
                     <h4 class="mb-3">
                         Current Room: 
-                        <span class="text-primary fw-bold" id="room-name">Room Name</span>
+                        <span class="text-primary fw-bold" id="room-name">Train Room</span>
                     </h4>
                     <h6 class="mb-3">
                         Room Code: 
                         <span class="text-primary fw-bold" id="room-id">XXX</span>
                     </h6>
                     <p class="mb-2">
-                        <strong>Description:</strong> 
-                        <span id="room-description">Room Description</span>
-                    </p>
-                    <p class="mb-2">
-                        <strong>Owner:</strong> 
+                        <strong>Created By:</strong> 
                         <span class="text-success fw-bold" id="room-owner">Room Owner</span>
                     </p>
-                    <p class="mb-3">
-                        <strong>Room Type:</strong> 
-                        <span 
-                            id="room-type" 
-                            class="fw-bold" 
-                            style="color: var(--bs-danger, red);"
-                        >
-                            Private Room 🔒
-                        </span>
-                    </p>
-                    <button 
-                        id="roomMember" 
-                        class="btn btn-outline-info btn-sm" 
-                        data-bs-toggle="modal" 
-                        data-bs-target="#memberModal"
-                    >
-                        User Joined Room
-                    </button>
-                </div>
+                    <hr>
+                    <div class="additional-info">
+                        <h5 class="text-center">AI Description</h5>
+                        <p class="mb-2">
+                            <strong>Description:</strong> 
+                            <span id="user-description">User Description</span>
+                        </p>
+                        <p class="mb-2">
+                            🏷 <strong>Employment:</strong> 
+                            <span id="employment-type">-</span>
+                        </p>
+                        <p class="mb-2">
+                            🧑‍🤝‍🧑 <strong>Gender:</strong> 
+                            <span class="badge bg-primary text-white" id="gender">-</span>
+                        </p>
+                        <p class="mb-2">
+                            🌍 <strong>Main Language:</strong> 
+                            <span class="badge bg-warning text-dark" id="language">-</span>
+                        </p>
+                        <p class="mb-2">
+                            ⏳ <strong>Age Range:</strong> 
+                            <span class="badge bg-secondary" id="range-age">-</span>
+                        </p>
+                    </div>
                 
-
-                <!-- Modal Member List-->
-                <div id="memberModal" class="modal fade" tabindex="-1" role="dialog">
-                    <div class="modal-dialog modal-dialog-centered" role="document">
-                        <div class="modal-content">
-                            <div class="modal-header">
-                                <h5 class="modal-title">Room Members</h5>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body" style="max-height: 400px; overflow-y: auto;">
-                                <p class="text-muted" id="memberModalBodyNoAvail">No other user joined this room</p>
-                                <ul id="member-list" class="list-group">
-                                    <!-- Members will be dynamically populated here -->
-                                </ul>
-                            </div>
-                            <div class="modal-footer">
-                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                            </div>
-                        </div>
+                    <hr>
+            
+                    <div class="personal-details">
+                        <p class="mb-2">
+                            🎸 <strong>Hobby:</strong> 
+                            <span class="text-success" id="hobby">
+                                -
+                            </span>
+                        </p>
+                        <p class="mb-2">
+                            😆 <strong>Personality:</strong> 
+                            <span class="text-primary" id="personality">
+                                -
+                            </span>
+                        </p>
                     </div>
                 </div>
 
@@ -75,6 +72,9 @@
                 </div>
 
                 <!-- Chat Input -->
+                <div id="chat-end">
+
+                </div>
                 <form id="chatroom-message">
                     <div class="mb-3">
                         <label for="message" class="form-label">Message</label>
@@ -100,6 +100,29 @@
 
     <script>
         // // // CONST
+        // MESSAGES BELOW is the array to store the messages that will be displayed in the chat area (from user and AI) and data saved in array are all message except the SYSTEM PROMPT for give the AI context the structure of the message wil be
+        // const message = {
+        //     Role: "user/assistant",
+        //     Content: "message",
+        // }
+        const MESSAGES = []
+
+        //  so if llm decide to not continue the chat, the user can't send message anymore
+        let IS_STILL_CONTINUE = true
+
+        function isStillContinue() {
+            if(!IS_STILL_CONTINUE) {
+                $("#chatroom-message").remove()
+
+                let chatContainer = $("#chat-end");
+                let chatEndedMessage = $("<div>")
+                    .addClass("alert alert-danger text-center")
+                    .html("🛑 <strong>The chat session has ended!</strong><br>⚡ Our AI has wrapped up the conversation, and messages can no longer be sent. Thanks for chatting! 😊");
+                chatContainer.append(chatEndedMessage);
+
+            }
+        }
+
         // EVENT TYPE
         const CHANGE_ROOM = "change_room"
         const SEND_MESSAGE = "send_message"
@@ -113,7 +136,7 @@
         // get path room code from url 
         const FULL_PATH = window.location.pathname
         const PATH_ROOM = FULL_PATH.split("/")
-        const ROOM_CODE = PATH_ROOM[PATH_ROOM.length - 1]
+        const ROOM_CODE = PATH_ROOM[PATH_ROOM.length - 2] // bcs the last element is 'train' string
 
         // url
         const BASE_URL = "/api/messages"
@@ -148,6 +171,11 @@
                 case NEW_MESSAGE:
                     const messageEvent = Object.assign(new NewMessageEvent, event.payload)
                     appendChatMessage(messageEvent)
+                    // // ADD MESSAGE TO MESSAGES ARRAY FOR FUTURE REFERENCE HERE
+                    // MESSAGES.push({
+                    //     Role: messageEvent.from === MY_NAME ? "user" : "assistant",
+                    //     Content: messageEvent.message
+                    // })
                     break
                 default:
                     showInfoModal('Event Received: ' + event.type + ' (unsupported event type)', 'Error')
@@ -182,6 +210,19 @@
             conn.send(JSON.stringify(event))
         }
 
+        function receiveMessageLLM(message) {
+            if (message !== null && message.trim() !== "") {
+                // send message to the server with send event
+
+                // first setup the format for the message event
+                let outgoingEvent = new SendMessageEvent(message, "assistant")
+
+                // send the message event to the server
+                sendEvent(SEND_MESSAGE, outgoingEvent)
+            }
+            return false;
+        }
+
         function sendMessage() {
             const newMessage = $('#message').val();
             if (newMessage !== null && newMessage.trim() !== "") {
@@ -192,6 +233,7 @@
 
                 // send the message event to the server
                 sendEvent(SEND_MESSAGE, outgoingEvent)
+
                 $('#message').val('')
             }
             return false;
@@ -202,7 +244,7 @@
             showLoader()
 
             try {
-                const resp = await fetch("/api/rooms/" + ROOM_CODE, {
+                const resp = await fetch("/api/rooms/" + ROOM_CODE + "/train/detail", {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json'
@@ -214,50 +256,24 @@
                 else {
                     // append the messages to the chat area
                     const room = response.data.room 
-                    const members = response.data.members
-                    // for now, the mechanism to check if the user is a member of the room is by checking the user_id -> prevent bypass by changing the room code in the URL
-                    // just check when the room is private and the user is not the owner
-                    if ((room.is_private) && (room.username !== MY_NAME)) {
-                        const user_id = parseInt(USER_ID)
-                        let is_member = false
-                        for (member of members) {
-                            if (member.user_id === user_id) {
-                                SENDER_NAME = member.username
-                                is_member = true
-                                break
-                            }
-                        }
+                    const room_detail = response.data.room_detail
 
-                        if (!is_member) throw new Error('<b>Room is Private & you are not a member of this room</b>')
-                    }
+                    // for now, the mechanism to check if the user is owner of the room is by checking if the room owner is the same as the user
+                    if (room.username !== MY_NAME) throw new Error('<b>Room is Private & you are not a member of this room</b>')
                     
-                    $('#room-name').text(room.room_name)
                     $('#room-id').text(room.room_code)
-                    $('#room-description').text(room.description)
                     $('#room-owner').text(room.username)
-                    if (room.is_private) {
-                        $('#room-type').text('Private Room 🔒')
-                        $('#room-type').css('color', 'var(--bs-danger, red)')
-                    } else {
-                        $('#room-type').text('Public Room 🔓')
-                        $('#room-type').css('color', 'var(--bs-success, green)')
-                    }
+                    $('#employment-type').text(room_detail.employment_type)
+                    $('#gender').text(room_detail.gender.toUpperCase())
+                    $('#language').text(room_detail.language.toUpperCase())
+                    $('#range-age').text(room_detail.range_age)
+                    $('#hobby').text(room_detail.hobby)
+                    $('#personality').text(room_detail.personality)
+                    $('#user-description').text(room_detail.description)
 
-                    if (members.length > 0) {
-                        $('#memberModalBodyNoAvail').hide()
-                        members.forEach(member => {
-                            const join_date = new Date(member.created_at).toLocaleDateString('en-US', { 
-                                year: 'numeric', month: 'long', day: 'numeric' 
-                            }) 
-                            
-                            $("#member-list").append(
-                                $("<li>")
-                                    .addClass("list-group-item")
-                                    .html(`<b>${member.username}</b> (Joined: <b>${join_date}</b>)`)
-                            )
-                        })
-                    }
-
+                    // check if the chat is still continue or not from the room detail
+                    IS_STILL_CONTINUE = room_detail.is_still_continue
+                    isStillContinue()
                 }
 
             } catch(e) {
@@ -284,6 +300,7 @@
                 else {
                     // append the messages to the chat area
                     const messages = response.data.messages
+                    
                     if (messages.length > 0) {
                         response.data.messages.forEach(message => {
                             const data = {
@@ -295,6 +312,12 @@
 
                             // for every message received, append it to the chat area ith chat append event function
                             appendChatMessage(messageData)
+
+                            // ADD MESSAGE TO MESSAGES ARRAY FOR FUTURE REFERENCE HERE
+                            MESSAGES.push({
+                                Role: message.sender_username === MY_NAME ? "user" : "assistant",
+                                Content: message.content
+                            })
                         })
                     }
                 }
@@ -308,28 +331,92 @@
             event.preventDefault()
 
             const newMessage = $('#message').val();
-
-            const messageBody = JSON.stringify({
-                room_code : ROOM_CODE,
-                sender_id : parseInt(USER_ID),
-                content: newMessage
-            })
+            showLoader()
 
             try {
-                const resp = await fetch(BASE_URL, {
+                // first send the message to the LLM API endpoint to get the answer
+
+                // ADD MESSAGE TO MESSAGES ARRAY FOR FUTURE REFERENCE HERE
+                MESSAGES.push({
+                    Role: "user",
+                    Content: newMessage
+                })
+            
+                const resp_llm = await fetch(BASE_URL + "/train", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: messageBody
+                    body: JSON.stringify({
+                        trainer_data: {
+                            gender: $('#gender').text(),
+                            language: $('#language').text(),
+                            range_age: $('#range-age').text(),
+                            employment_type: $('#employment-type').text(),
+                            hobby: $('#hobby').text(),
+                            personality: $('#personality').text(),
+                            description: $('#user-description').text(),
+                            room_code: ROOM_CODE
+                        },
+                        messages: MESSAGES
+                    })
                 })
-                const response = await resp.json()
+                const response_llm = await resp_llm.json()
+                
+                if (response_llm.error) {
+                    // bcs failed so delete the last message on array
+                    MESSAGES.pop()
 
-                if (response.error) throw new Error(response.message)
-                else sendMessage() // send the message to the server
+                    throw new Error(response_llm.message)
+                } else {
+                    // here because the message is successfully sent to the LLM API and we got the response 
+
+                    // append message to MESSAGES array
+                    const llm_message = response_llm.data.data_message.content
+                    MESSAGES.push({
+                        Role: "assistant",
+                        Content: llm_message
+                    })
+
+                    // if success get response from llm, then send the message to the server to save in database
+                    // SEND MESSAGE TO SAVE IN DATABASE for train mode
+                    const messageBody = JSON.stringify({
+                        room_code : ROOM_CODE,
+                        sender_id : parseInt(USER_ID),
+                        content: newMessage, 
+                        llm_content: llm_message
+                    })
+
+                    const resp = await fetch(BASE_URL + "/train/save", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: messageBody
+                    })
+                    const response = await resp.json()
+
+                    if (response.error) {
+                        // BELOW pop 2 times bcs the message is not saved to server so will be delete the message from user and the message from llm
+                        MESSAGES.pop() // delete the last message on array
+                        MESSAGES.pop() // delete the last message on array
+                        throw new Error(response.message)
+                    }
+                    // ONLY if the message is successfully sent and saved to server, append the message to the chat area
+                    else { 
+                        sendMessage() // append the message to the chat area
+                        receiveMessageLLM(llm_message) // append the message from llm to the chat area
+                    }
+                    // update the IS_STILL_CONTINUE variable from the response
+                    IS_STILL_CONTINUE = response_llm.data.data_message.continue_chat
+                    // check if the chat is still continue or not
+                    isStillContinue()
+                }
 
             } catch (e) {
                 showInfoModal('Failed to send message: ' + e.message, 'Error')
+            } finally {
+                hideLoader()
             }
         }
 

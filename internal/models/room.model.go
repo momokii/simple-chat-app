@@ -8,10 +8,10 @@ type RoomChat struct {
 	Description string `json:"description" validate:"required,min=1,max=140"`
 	Password    string `json:"password"`
 	IsPrivate   bool   `json:"is_private"`
+	IsTrainRoom bool   `json:"is_train_room"`
 	CreatedAt   string `json:"created_at" validate:"required"`
 	UpdatedAt   string `json:"updated_at" validate:"required"`
 }
-
 type RoomChatCreate struct {
 	RoomName    string `json:"room_name" validate:"required,min=1,max=30"`
 	Description string `json:"description" validate:"required,min=1,max=140"`
@@ -37,6 +37,7 @@ type RoomChatDataShow struct {
 	RoomName    string `json:"room_name" validate:"required,min=1,max=30"`
 	Description string `json:"description" validate:"required,min=1,max=140"`
 	IsPrivate   bool   `json:"is_private"`
+	IsTrainRoom bool   `json:"is_train_room"`
 	Password    string `json:"password"`
 	CreatedAt   string `json:"created_at" validate:"required"`
 }
