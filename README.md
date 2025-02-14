@@ -9,6 +9,11 @@ Feel free to explore the code, suggest improvements, or use it as inspiration fo
 - Real-time messaging using WebSocket.
 - Lightweight server built with the Go Fiber framework.
 - Dating App Chat Simulation with LLM (OpenAI)
+- **Integrated with Single Sign-On (SSO)** for user authentication.  
+  (SSO implementation can be found in [go-sso-web repository](https://github.com/momokii/go-sso-web)).
+
+## Related Projects
+- [go-sso-web](https://github.com/momokii/go-sso-web): A repository for the custom Single Sign-On (SSO) implementation integrated into this chat application.
 
 ## How to Run
 
