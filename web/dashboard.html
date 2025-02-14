@@ -962,7 +962,9 @@
 
                 if (!response.error) {
                     hideLoader()
-                    window.location.href = '/login'
+                    // setup for sso, just throw to dashboard page for now, because on backend will redirect to SSO dashboard page
+                    window.location.href = '/'
+
                 } else {
                     hideLoader()
                     showInfoModal('Logout Failed', 'Failed to logout')

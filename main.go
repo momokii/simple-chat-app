@@ -17,6 +17,7 @@ import (
 	"github.com/momokii/simple-chat-app/internal/repository/room"
 	roommember "github.com/momokii/simple-chat-app/internal/repository/room_member"
 	"github.com/momokii/simple-chat-app/internal/repository/room_train"
+	"github.com/momokii/simple-chat-app/internal/repository/session"
 	"github.com/momokii/simple-chat-app/internal/repository/user"
 	"github.com/momokii/simple-chat-app/internal/ws"
 
@@ -47,9 +48,10 @@ func main() {
 	roomTrainRepo := room_train.NewRoomChatTrainRepo()
 	messageRepo := message.NewMessageRepo()
 	roomemberRepo := roommember.NewRoomMember()
+	sessionRepo := session.NewSessionRepo()
 
 	// handler init
-	authHandler := handlers.NewAuthHandler(*userRepo)
+	authHandler := handlers.NewAuthHandler(*userRepo, *sessionRepo)
 	roomHandler := handlers.NewRoomChatHandler(*roomRepo, *roomTrainRepo, *roomemberRepo, gptClient)
 	userHandler := handlers.NewUserHandler(*userRepo)
 	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo, gptClient, *roomTrainRepo)
@@ -82,11 +84,16 @@ func main() {
 	app.Get("/", middlewares.IsAuth, roomHandler.RoomMainDashboardView)
 
 	// base http route
-	app.Get("/login", middlewares.IsNotAuth, authHandler.LoginView)
-	api.Post("/login", middlewares.IsNotAuth, authHandler.Login)
 
-	app.Get("/signup", middlewares.IsNotAuth, authHandler.SignUpView)
-	api.Post("/signup", middlewares.IsNotAuth, authHandler.SignUp)
+	// not using login and signup page, because using SSO
+	// app.Get("/login", middlewares.IsNotAuth, authHandler.LoginView)
+	// api.Post("/login", middlewares.IsNotAuth, authHandler.Login)
+
+	// app.Get("/signup", middlewares.IsNotAuth, authHandler.SignUpView)
+	// api.Post("/signup", middlewares.IsNotAuth, authHandler.SignUp)
+
+	// auth sso
+	app.Get("/auth/sso", middlewares.IsNotAuth, authHandler.SSOAuthLogin)
 
 	api.Post("/logout", middlewares.IsAuth, authHandler.Logout)
 

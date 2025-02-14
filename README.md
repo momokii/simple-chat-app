@@ -8,6 +8,7 @@ Feel free to explore the code, suggest improvements, or use it as inspiration fo
 - Simple, responsive design with HTML, CSS, and jQuery.
 - Real-time messaging using WebSocket.
 - Lightweight server built with the Go Fiber framework.
+- Dating App Chat Simulation with LLM (OpenAI)
 
 ## How to Run
 

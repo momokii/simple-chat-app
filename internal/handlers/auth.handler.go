@@ -1,10 +1,15 @@
 package handlers
 
 import (
+	"errors"
+	"os"
+
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/momokii/simple-chat-app/internal/database"
 	"github.com/momokii/simple-chat-app/internal/middlewares"
+	"github.com/momokii/simple-chat-app/internal/repository/session"
 	"github.com/momokii/simple-chat-app/internal/repository/user"
 	"github.com/momokii/simple-chat-app/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
@@ -16,15 +21,75 @@ type Auth struct {
 }
 
 type AuthHandler struct {
-	userRepo user.UserRepo
+	userRepo    user.UserRepo
+	sessionRepo session.SessionRepo
 }
 
-func NewAuthHandler(userRepo user.UserRepo) *AuthHandler {
+func NewAuthHandler(userRepo user.UserRepo, sessionRepo session.SessionRepo) *AuthHandler {
 	return &AuthHandler{
-		userRepo: userRepo,
+		userRepo:    userRepo,
+		sessionRepo: sessionRepo,
 	}
 }
 
+// SSO func
+func (h *AuthHandler) SSOAuthLogin(c *fiber.Ctx) error {
+	// get jwt token from request
+	token := c.Query("token")
+	if token == "" {
+		return errors.New("token is required")
+	}
+
+	// validate token
+	token_data, err := jwt.Parse(token, func(token *jwt.Token) (interface{}, error) {
+		return []byte(os.Getenv("JWT_SECRET")), nil
+	})
+	if err != nil {
+		return errors.New("invalid token")
+	}
+
+	session_id := token_data.Claims.(jwt.MapClaims)["session_id"].(string)
+	user_id := int(token_data.Claims.(jwt.MapClaims)["user_id"].(float64))
+
+	// check session on db if valid or not
+	tx, err := database.DB.Begin()
+	if err != nil {
+		return errors.New("Internal server error on setup db tx: " + err.Error())
+	}
+	defer func() {
+		database.CommitOrRollback(tx, c, err)
+	}()
+
+	session_check, err := h.sessionRepo.FindSession(tx, session_id, user_id)
+	if err != nil {
+		return errors.New("Internal server error on find session: " + err.Error())
+	}
+
+	if session_check.Id == 0 && session_check.SessionId == "" && session_check.UserId == 0 {
+
+		return errors.New("invalid, session not found")
+	}
+
+	// save session to fiber session data
+	if err := middlewares.CreateSession(c, "id", user_id); err != nil {
+		return errors.New("Internal server error on create session: " + err.Error())
+	}
+
+	if err := middlewares.CreateSession(c, "session_id", session_id); err != nil {
+		return errors.New("Internal server error on create session: " + err.Error())
+	}
+
+	return c.Redirect("/")
+}
+
+func (h *AuthHandler) Logout(c *fiber.Ctx) error {
+	// delete session here
+	middlewares.DeleteSession(c)
+
+	return utils.ResponseMessage(c, fiber.StatusOK, "Logout success")
+}
+
+// function below can use it when not using SSO
 func (h *AuthHandler) LoginView(c *fiber.Ctx) error {
 	return c.Render("login", fiber.Map{
 		"Title": "Login - Chat Nge-Chat",
@@ -139,11 +204,4 @@ func (h *AuthHandler) Login(c *fiber.Ctx) error {
 	// })
 
 	return utils.ResponseMessage(c, fiber.StatusOK, "Login success")
-}
-
-func (h *AuthHandler) Logout(c *fiber.Ctx) error {
-	// delete session here
-	middlewares.DeleteSession(c)
-
-	return utils.ResponseMessage(c, fiber.StatusOK, "Logout success")
 }
