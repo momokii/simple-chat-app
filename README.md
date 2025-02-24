@@ -4,6 +4,20 @@ This repository contains the source code for a simple chat application that impl
 
 Feel free to explore the code, suggest improvements, or use it as inspiration for your own project!
 
+## **New Feature: Credit System Integration**
+This project now includes a **credit system** integrated with the SSO authentication. The credit tokens can be used to create and access the Dating App Chat Simulation. The credit system ensures fair usage and allows users to manage their usage effectively.
+
+## **How the Credit System Works**
+- Users must authenticate via the SSO system.
+- Credit tokens can be used to create and access features of the Dating App Chat Simulation, with a cost of 10 credit tokens per create room.
+- Credits can be reset daily with user will give MAX 15 token.
+- The system ensures fair usage and prevents excessive resource consumption.
+
+This update ensures that resource-heavy features remain accessible while maintaining an efficient and fair usage model.
+
+---
+For further details on implementation, refer to the [go-sso-web repository](https://github.com/momokii/go-sso-web).
+
 ## Features
 - Simple, responsive design with HTML, CSS, and jQuery.
 - Real-time messaging using WebSocket.
