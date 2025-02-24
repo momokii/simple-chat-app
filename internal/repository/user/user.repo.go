@@ -15,9 +15,13 @@ func NewUserRepo() *UserRepo {
 func (r *UserRepo) FindByID(tx *sql.Tx, id int) (*models.User, error) {
 	var user models.User
 
-	query := "SELECT id, username, password FROM users WHERE id = $1"
+	query := `
+		SELECT id, username, password, credit_token, 
+		COALESCE(last_first_llm_used::text, '') as last_first_llm_used 
+		FROM users WHERE id = $1
+	`
 
-	if err := tx.QueryRow(query, id).Scan(&user.Id, &user.Username, &user.Password); err != nil && err != sql.ErrNoRows {
+	if err := tx.QueryRow(query, id).Scan(&user.Id, &user.Username, &user.Password, &user.CreditToken, &user.LastFirstLLMUsed); err != nil && err != sql.ErrNoRows {
 		return &user, err
 	}
 

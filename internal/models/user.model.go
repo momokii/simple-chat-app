@@ -1,14 +1,18 @@
 package models
 
 type User struct {
-	Id       int    `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	Id               int    `json:"id"`
+	Username         string `json:"username"`
+	Password         string `json:"password"`
+	CreditToken      int    `json:"credit_token"`
+	LastFirstLLMUsed string `json:"last_first_llm_used"`
 }
 
 type UserSession struct {
-	Id       int    `json:"id"`
-	Username string `json:"username"`
+	Id               int    `json:"id"`
+	Username         string `json:"username"`
+	CreditToken      int    `json:"credit_token"`
+	LastFirstLLMUsed string `json:"last_first_llm_used"`
 }
 
 type UserChangeUsernameInput struct {

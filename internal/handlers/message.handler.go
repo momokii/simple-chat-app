@@ -14,21 +14,26 @@ import (
 	"github.com/momokii/simple-chat-app/internal/repository/room"
 	"github.com/momokii/simple-chat-app/internal/repository/room_train"
 	"github.com/momokii/simple-chat-app/pkg/utils"
+
+	sso_models "github.com/momokii/go-sso-web/pkg/models"
+	sso_credit_reserved "github.com/momokii/go-sso-web/pkg/repository/user_credit_reserved"
 )
 
 type MessageHandler struct {
-	roomChatRepo  room.RoomChatRepo
-	roomTrainRepo room_train.RoomChatTrainRepo
-	message       message.MessageRepo
-	openaiClient  openai.OpenAI
+	roomChatRepo      room.RoomChatRepo
+	roomTrainRepo     room_train.RoomChatTrainRepo
+	message           message.MessageRepo
+	openaiClient      openai.OpenAI
+	reservedTokenRepo sso_credit_reserved.UserCreditReserved
 }
 
-func NewMessageHandler(roomRepo room.RoomChatRepo, messageRepo message.MessageRepo, openaiClient openai.OpenAI, roomTrain room_train.RoomChatTrainRepo) *MessageHandler {
+func NewMessageHandler(roomRepo room.RoomChatRepo, messageRepo message.MessageRepo, openaiClient openai.OpenAI, roomTrain room_train.RoomChatTrainRepo, reservedTokenRepo sso_credit_reserved.UserCreditReserved) *MessageHandler {
 	return &MessageHandler{
-		roomChatRepo:  roomRepo,
-		message:       messageRepo,
-		openaiClient:  openaiClient,
-		roomTrainRepo: roomTrain,
+		roomChatRepo:      roomRepo,
+		message:           messageRepo,
+		openaiClient:      openaiClient,
+		roomTrainRepo:     roomTrain,
+		reservedTokenRepo: reservedTokenRepo,
 	}
 }
 
@@ -172,6 +177,7 @@ func (h *MessageHandler) SendMessageTrain(c *fiber.Ctx) error {
 	}
 
 	// if llm give response that continue_chat is false, then update the room_chat_train is_still_continue to false
+	// also here update to reserved token user to "completed" status
 	if !response_data.ContinueChat {
 		tx, err := database.DB.Begin()
 		if err != nil {
@@ -181,9 +187,36 @@ func (h *MessageHandler) SendMessageTrain(c *fiber.Ctx) error {
 			database.CommitOrRollback(tx, c, err)
 		}()
 
+		// update the room status
 		if err := h.roomTrainRepo.UpdateStatus(tx, trainer_data.TrainerData.RoomCode); err != nil {
 			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to update room chat train status")
 		}
+
+		log.Println("room status updated")
+
+		// update the reserved_token status
+		reserved_token_data, err := h.reservedTokenRepo.FindRoomByCode(tx, trainer_data.TrainerData.RoomCode)
+		if err != nil {
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get reserved token data")
+		}
+
+		if reserved_token_data.Id == 0 {
+			return utils.ResponseError(c, fiber.StatusBadRequest, "Reserved token data is not exist")
+		}
+
+		reserved_token_update := sso_models.UserCreditReserved{
+			Id:          reserved_token_data.Id,
+			Status:      "confirmed",
+			FeatureType: reserved_token_data.FeatureType,
+			Credit:      reserved_token_data.Credit,
+		}
+
+		if err := h.reservedTokenRepo.Update(tx, &reserved_token_update); err != nil {
+			log.Println(err)
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to update reserved token status")
+		}
+
+		log.Println("reserved data updated")
 	}
 
 	return utils.ResponseWithData(c, fiber.StatusOK, "Success Get Message from LLM", fiber.Map{

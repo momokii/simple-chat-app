@@ -137,8 +137,10 @@ func IsAuth(c *fiber.Ctx) error {
 	}
 
 	userSession := models.UserSession{
-		Id:       userData.Id,
-		Username: userData.Username,
+		Id:               userData.Id,
+		Username:         userData.Username,
+		CreditToken:      userData.CreditToken,
+		LastFirstLLMUsed: userData.LastFirstLLMUsed,
 	}
 
 	// store information for next data

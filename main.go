@@ -21,6 +21,10 @@ import (
 	"github.com/momokii/simple-chat-app/internal/repository/user"
 	"github.com/momokii/simple-chat-app/internal/ws"
 
+	sso_conn_room_reserved "github.com/momokii/go-sso-web/pkg/repository/conn_room_credit_reserved"
+	sso_user "github.com/momokii/go-sso-web/pkg/repository/user"
+	sso_credit_reserved "github.com/momokii/go-sso-web/pkg/repository/user_credit_reserved"
+
 	_ "github.com/joho/godotenv/autoload"
 )
 
@@ -49,12 +53,15 @@ func main() {
 	messageRepo := message.NewMessageRepo()
 	roomemberRepo := roommember.NewRoomMember()
 	sessionRepo := session.NewSessionRepo()
+	SSOCreditReservedRepo := sso_credit_reserved.NewUserCreditReserved()
+	SSOConnReservedRoomRepo := sso_conn_room_reserved.NewConnRoomCreditReserved()
+	SSOUser := sso_user.NewUserRepo()
 
 	// handler init
 	authHandler := handlers.NewAuthHandler(*userRepo, *sessionRepo)
-	roomHandler := handlers.NewRoomChatHandler(*roomRepo, *roomTrainRepo, *roomemberRepo, gptClient)
+	roomHandler := handlers.NewRoomChatHandler(*roomRepo, *roomTrainRepo, *roomemberRepo, gptClient, *SSOUser, *SSOCreditReservedRepo, *SSOConnReservedRoomRepo)
 	userHandler := handlers.NewUserHandler(*userRepo)
-	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo, gptClient, *roomTrainRepo)
+	messageHandler := handlers.NewMessageHandler(*roomRepo, *messageRepo, gptClient, *roomTrainRepo, *SSOCreditReservedRepo)
 
 	// init websocket manager
 	manager := ws.NewManager()

@@ -5,7 +5,7 @@
         <div class="header bg-light rounded d-flex align-items-center justify-content-between p-3">
             <div class="d-flex align-items-center">
                 <img src="/web/images/logo/logo-chat-app.png" alt="Logo" class="rounded-circle me-3" style="width: 40px; height: 40px; object-fit: cover;">
-        
+                
                 <div>
                     <input type="text" id="userID" value="{{.User.Id}}" hidden disabled>
                     <h3>👤 
@@ -18,6 +18,9 @@
                         </span>
                     </h3>
         
+                    <!-- Menampilkan jumlah kredit token user -->
+                    <p class="mb-1 md-1 text-muted">💰 <strong>Credit Token:</strong> <span id="userCredit" class="fw-bold">{{.User.CreditToken}}</span></p>
+                    
                     <button id="editUsername" class="btn btn-outline-info btn-sm" data-bs-toggle="modal" data-bs-target="#editUsernameModal">Edit Username</button>
                     <button id="editPassword" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#editPasswordModal">Edit Password</button>
                     <button id="logoutBtn" class="btn btn-outline-danger btn-sm">Logout</button>
@@ -28,8 +31,14 @@
                 <button class="btn btn-outline-success me-2" id="createRoomBtn" data-bs-toggle="modal" data-bs-target="#createRoomModal">+ Create Room</button>
                 <button class="btn btn-outline-warning" id="createTrainRoomBtn" data-bs-toggle="modal" data-bs-target="#createTrainRoomModal">+ Dating App Training Room</button>
             </div>
-            
         </div>
+        
+        <!-- Informasi bahwa pembuatan room memotong 10 token -->
+        <div class="alert alert-warning mt-2" role="alert">
+            ⚠️ Creating a "<b>Dating App Training Room</b>" will <b>deduct 10 tokens</b> from your balance.<br>
+            🚨 If the room is still active (not closed), your <b>daily token reset is limited to 5 instead of 15</b>.
+        </div>
+        
         
     
         <!-- Tabs for Room -->

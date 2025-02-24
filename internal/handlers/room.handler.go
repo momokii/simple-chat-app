@@ -16,21 +16,33 @@ import (
 	"github.com/momokii/simple-chat-app/internal/repository/room_train"
 	"github.com/momokii/simple-chat-app/pkg/utils"
 	"golang.org/x/crypto/bcrypt"
+
+	sso_models "github.com/momokii/go-sso-web/pkg/models"
+	sso_conn_room_reserved "github.com/momokii/go-sso-web/pkg/repository/conn_room_credit_reserved"
+	sso_user "github.com/momokii/go-sso-web/pkg/repository/user"
+	sso_credit_reserved "github.com/momokii/go-sso-web/pkg/repository/user_credit_reserved"
+	sso_utils "github.com/momokii/go-sso-web/pkg/utils"
 )
 
 type RoomChatHandler struct {
-	roomChatRepo      room.RoomChatRepo
-	roomChatTrainRepo room_train.RoomChatTrainRepo
-	roomMemberRepo    roommember.RoomMemberRepo
-	openaiClient      openai.OpenAI
+	roomChatRepo               room.RoomChatRepo
+	roomChatTrainRepo          room_train.RoomChatTrainRepo
+	roomMemberRepo             roommember.RoomMemberRepo
+	openaiClient               openai.OpenAI
+	userRepo                   sso_user.UserRepo
+	reservedTokenRepo          sso_credit_reserved.UserCreditReserved
+	connRoomCreditReservedRepo sso_conn_room_reserved.ConnRoomCreditReserved
 }
 
-func NewRoomChatHandler(roomChatRepo room.RoomChatRepo, roomTrainRepo room_train.RoomChatTrainRepo, roomMemberRepo roommember.RoomMemberRepo, openaiClient openai.OpenAI) *RoomChatHandler {
+func NewRoomChatHandler(roomChatRepo room.RoomChatRepo, roomTrainRepo room_train.RoomChatTrainRepo, roomMemberRepo roommember.RoomMemberRepo, openaiClient openai.OpenAI, userRepo sso_user.UserRepo, reservedTokenRepo sso_credit_reserved.UserCreditReserved, connRoomCreditReservedRepo sso_conn_room_reserved.ConnRoomCreditReserved) *RoomChatHandler {
 	return &RoomChatHandler{
-		roomChatRepo:      roomChatRepo,
-		roomChatTrainRepo: roomTrainRepo,
-		roomMemberRepo:    roomMemberRepo,
-		openaiClient:      openaiClient,
+		roomChatRepo:               roomChatRepo,
+		roomChatTrainRepo:          roomTrainRepo,
+		roomMemberRepo:             roomMemberRepo,
+		openaiClient:               openaiClient,
+		userRepo:                   userRepo,
+		reservedTokenRepo:          reservedTokenRepo,
+		connRoomCreditReservedRepo: connRoomCreditReservedRepo,
 	}
 }
 
@@ -245,6 +257,22 @@ func (h *RoomChatHandler) CreateTrainRoom(c *fiber.Ctx) error {
 		database.CommitOrRollback(tx, c, err)
 	}()
 
+	// check if user has enough credit to create train room
+	user_data, err := h.userRepo.FindByID(tx, user.Id)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get user data")
+	}
+
+	if user_data.Id == 0 {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "User not found")
+	}
+
+	if user_data.CreditToken < utils.FEATURE_DATING_CHAT_SIMULATION_COST {
+		return utils.ResponseError(c, fiber.StatusBadRequest, "You don't have enough credit to create this room")
+	}
+
+	// start process
+
 	// init message to openai to get description for train room mate using llm
 	baseMessageReq := fmt.Sprintf(`"Buat profil *fictional* untuk simulasi dating app (Tinder/Bumble vibe) dengan kriteria yang akan dijelaskan di bawah. 
 	Pastikan bahasanya SUPER CASUAL, pakai slang gen Z, emoji, dan deskripsi unik ala bio Instagram/Tinder/Bumble pada umumnya.
@@ -358,6 +386,32 @@ func (h *RoomChatHandler) CreateTrainRoom(c *fiber.Ctx) error {
 	if err := h.roomChatTrainRepo.Create(tx, &newRoomTrain); err != nil {
 		fmt.Println(err)
 		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to create new train room")
+	}
+
+	// add data to reserved token
+	reserved_token := sso_models.UserCreditReserved{
+		UserId:      user.Id,
+		Credit:      utils.FEATURE_DATING_CHAT_SIMULATION_COST,
+		FeatureType: "chat-ai", // enum type for chat ai
+		Status:      "pending", // enum type for status
+	}
+	id_reserved, err := h.reservedTokenRepo.Create(tx, &reserved_token)
+	if err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to create reserved token")
+	}
+
+	// if success add data to conn reserved token for chat data to have connection from reserved token to room
+	conn_room_reserved_token := sso_models.ConnRoomCreditReserved{
+		RoomCode:             codeRoom,
+		UserCreditReservedId: id_reserved,
+	}
+	if err := h.connRoomCreditReservedRepo.Create(tx, &conn_room_reserved_token); err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to create conn room credit reserved")
+	}
+
+	// deduct token from user data
+	if err := sso_utils.UpdateUserCredit(tx, h.userRepo, user_data, utils.FEATURE_DATING_CHAT_SIMULATION_COST); err != nil {
+		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to deduct user credit")
 	}
 
 	return utils.ResponseMessage(c, fiber.StatusOK, "Success Create Train Room")
@@ -536,6 +590,12 @@ func (h *RoomChatHandler) EditRoom(c *fiber.Ctx) error {
 }
 
 func (h *RoomChatHandler) DeleteRoom(c *fiber.Ctx) error {
+	// process here will be
+	// - change the reserved_token status to completed
+	// - and delete the room
+	// (dont care about detailed room_chat_train because it will be deleted automatically because of foreign key)
+	// just check if the room si room_chat_ai or not and if yes executed flow above and if not just delete the room
+
 	user := c.Locals("user").(models.UserSession)
 
 	roomDelete := new(models.RoomChatDelete)
@@ -574,6 +634,33 @@ func (h *RoomChatHandler) DeleteRoom(c *fiber.Ctx) error {
 	// if exist, check if user is the creator or not
 	if user.Id != isRoomExist.CreatedBy {
 		return utils.ResponseError(c, fiber.StatusUnauthorized, "You are not allowed to delete this room")
+	}
+
+	// if the room is train room, so delete the reserved token and conn room credit reserved
+	if isRoomExist.IsTrainRoom {
+		// get room credit reserved data
+		room_reserved_data, err := h.reservedTokenRepo.FindRoomByCode(tx, isRoomExist.RoomCode)
+		if err != nil {
+			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to get room credit reserved data")
+		}
+
+		if room_reserved_data.Id == 0 {
+			return utils.ResponseError(c, fiber.StatusBadRequest, "Room credit reserved data not found")
+		}
+
+		// update the status of reserved token to completed if the room is still active
+		if room_reserved_data.IsHaveRoomActive {
+			reserved_data_update := sso_models.UserCreditReserved{
+				Id:          room_reserved_data.Id,
+				Status:      "confirmed", // enum type for status
+				Credit:      room_reserved_data.Credit,
+				FeatureType: room_reserved_data.FeatureType,
+			}
+			if err := h.reservedTokenRepo.Update(tx, &reserved_data_update); err != nil {
+				return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to update reserved token")
+			}
+		}
+
 	}
 
 	// delete room
