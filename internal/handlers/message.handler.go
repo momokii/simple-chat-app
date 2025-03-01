@@ -3,7 +3,6 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
@@ -192,8 +191,6 @@ func (h *MessageHandler) SendMessageTrain(c *fiber.Ctx) error {
 			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to update room chat train status")
 		}
 
-		log.Println("room status updated")
-
 		// update the reserved_token status
 		reserved_token_data, err := h.reservedTokenRepo.FindRoomByCode(tx, trainer_data.TrainerData.RoomCode)
 		if err != nil {
@@ -212,11 +209,9 @@ func (h *MessageHandler) SendMessageTrain(c *fiber.Ctx) error {
 		}
 
 		if err := h.reservedTokenRepo.Update(tx, &reserved_token_update); err != nil {
-			log.Println(err)
 			return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to update reserved token status")
 		}
 
-		log.Println("reserved data updated")
 	}
 
 	return utils.ResponseWithData(c, fiber.StatusOK, "Success Get Message from LLM", fiber.Map{
@@ -284,7 +279,6 @@ func (h *MessageHandler) SaveMessageLLM(c *fiber.Ctx) error {
 		Content:  NewMessage.LLMContent,
 	}
 	if err := h.message.Create(tx, &messageAI); err != nil {
-		log.Println("sini")
 		return utils.ResponseError(c, fiber.StatusInternalServerError, "Failed to save new message for AI response")
 	}
 
